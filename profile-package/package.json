@@ -1,13 +1,32 @@
 {
   "name": "dsh-jira-tasks",
   "version": "1.0.0",
-  "description": "JIRA open tasks panel: shows the current user's open/reopened issues below the composer (per-workspace project key), persistent install for a DSH profile.",
+  "description": "JIRA open tasks panel for DeepSeek Harness (DSH): shows the current user's open/reopened issues below the composer, per-workspace project key, persistent profile bundle.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
     "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "jira",
+    "plugin",
+    "cordis",
+    "tasks"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/liu3734/jira-tasks-dsh-plugin.git"
   },
   "dsh": {
     "bundle": {

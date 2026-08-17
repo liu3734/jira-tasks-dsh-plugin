@@ -76,6 +76,14 @@
 
 ### 安装步骤
 
+包已发布到 **npm**（`dsh-jira-tasks@1.0.0`），一行安装：
+
+```bash
+dsh plugin --profile desktop add dsh-jira-tasks
+```
+
+> 无 npm 时的手动安装（源码来自 `profile-package/`）：
+
 1. 把 `profile-package/` 复制为 `~/.dsh/profiles/desktop/packages/dsh-jira-tasks/`
 2. 编辑 `~/.dsh/profiles/desktop/package.json`：
    - `dependencies` 增加：`"dsh-jira-tasks": "file:./packages/dsh-jira-tasks"`
@@ -86,8 +94,6 @@
    cd ~/.dsh/profiles/desktop
    "/Users/<你的用户名>/Library/Application Support/DSH Desktop/runtime-commands/bin/pnpm" install
    ```
-
-   > 也可直接用 DSH 自带命令：`dsh plugin --profile desktop add dsh-jira-tasks`
 
 4. **重启 DSH**（profile 插件集与客户端 bundle 在启动时扫描加载）
 
