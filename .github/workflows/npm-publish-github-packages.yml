@@ -1,7 +1,8 @@
-# This workflow will run tests using node and then publish a package to GitHub Packages when a release is created
-# For more information see: https://docs.github.com/en/actions/publishing-packages/publishing-nodejs-packages
+# Publish dsh-jira-tasks to the public npm registry when a release is created
+# The package lives in profile-package/, so all steps run there.
+# Requires the repository secret NPM_TOKEN (an npmjs.org access token).
 
-name: Node.js Package
+name: Publish npm package
 
 on:
   release:
@@ -10,27 +11,31 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: profile-package
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
-      - run: npm test
+      - run: npm install
 
-  publish-gpr:
+  publish-npm:
     needs: build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: profile-package
     permissions:
       contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: https://npm.pkg.github.com/
-      - run: npm ci
+          registry-url: https://registry.npmjs.org/
+      - run: npm install
       - run: npm publish
         env:
-          NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
