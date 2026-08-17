@@ -1,0 +1,23 @@
+{
+  "name": "dsh-jira-tasks",
+  "version": "1.0.0",
+  "description": "JIRA open tasks panel: shows the current user's open/reopened issues below the composer (per-workspace project key), persistent install for a DSH profile.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  }
+}

@@ -2,7 +2,7 @@
   "pluginId": "jira-1",
   "name": "JIRA 开启任务面板",
   "purpose": "按工作区配置项目 Key，在新会话输入框下方展示指派给当前用户的“开启/重新开启”任务；未配置的工作区显示未配置状态。",
-  "type": "dsh-dynamic-cordis-plugin",
+  "type": ["dsh-dynamic-cordis-plugin", "dsh-profile-bundle"],
   "defaultJql": "project = \"{projectKey}\" AND status in (\"开启\", \"重新开启\") AND assignee = currentUser() ORDER BY updated DESC",
   "envVars": {
     "JIRA_BASE_URL": "JIRA 地址（备选：JIRA_URL）",
@@ -14,6 +14,26 @@
   "slots": ["conversation.composer.dock", "conversation.input.dock"],
   "hostInjects": ["subprocess", "credentials", "sandboxPolicy"],
   "clientInjects": ["slots"],
+  "registration": {
+    "dynamic": {
+      "files": {
+        "host": "plugin/host.js",
+        "client": "plugin/client.js"
+      }
+    },
+    "profileBundle": {
+      "packageName": "dsh-jira-tasks",
+      "version": "1.0.0",
+      "profileDir": "$DSH_HOME/profiles/desktop",
+      "route": "POST /jira/api/search",
+      "files": {
+        "package": "profile-package/package.json",
+        "patch": "profile-package/cordis.patch.yml",
+        "host": "profile-package/lib/index.js",
+        "client": "profile-package/lib/client.js"
+      }
+    }
+  },
   "files": {
     "host": "plugin/host.js",
     "client": "plugin/client.js"

@@ -2,7 +2,7 @@
 
 在 DSH 会话的**输入框下方**展示当前 JIRA 项目**指派给当前用户**的"开启 / 重新开启"任务列表。JIRA 地址与令牌从凭据/环境变量读取，项目 Key 与 JQL **按工作区配置**并持久化；每个新会话自动查询。
 
-> 适用于 DSH（DeepSeek Harness）桌面端。插件以**动态 Cordis 插件**形式运行，无需改动 DSH 本体代码。
+> 适用于 DSH（DeepSeek Harness）桌面端。提供两种注册方式：**动态插件**（临时、随进程消失）与 **profile 正式安装**（持久化、重启保留）。无需改动 DSH 本体代码。
 
 ---
 
@@ -37,9 +37,11 @@
 
 ---
 
-## 安装 / 激活
+## 注册方式一：动态插件（临时）
 
-插件源码在本仓库 `plugin/` 目录：
+> 动态插件只存在于 DSH 进程内存，**重启后消失**；适合临时试用。正式使用请用下方的"注册方式二：正式安装"。
+
+插件源码在本仓库 `plugin/` 目录（动态版，Client 通过 `host.call` 与 Host 通信）：
 
 | 文件 | 说明 |
 |---|---|
@@ -53,7 +55,57 @@
 2. **运行**（`cordis_run`）：`mode: run` 激活；Client 端首次需在界面批准。
 3. 之后如需升级，修改源码后用 `cordis_define`（`kind: existing`）追加新 Package，再 `cordis_run`（`mode: update`）。
 
-> 插件当前版本：`pkg-15`（按工作区配置版）。
+> 动态版当前版本：`pkg-15`（按工作区配置版）。
+
+---
+
+## 注册方式二：正式安装（持久化，重启不丢）
+
+把插件安装为 DSH profile 的 **bundle**，重启后自动加载（本机已按此方式安装于 `~/.dsh/profiles/desktop/`）。
+
+### 仓库文件
+
+`profile-package/` 是完整的持久化插件包（包名 `dsh-jira-tasks`）：
+
+| 文件 | 说明 |
+|---|---|
+| `profile-package/package.json` | 包声明：`main`=Host、`exports["./client"]`=Client bundle、`dsh.bundle.patch`、`dsh.client(web)` |
+| `profile-package/cordis.patch.yml` | bundle patch：向 profile 组合插入 Host 插件行（等待 subprocess/credentials/sandboxPolicy/webServer 就绪） |
+| `profile-package/lib/index.js` | Host：注册 `webServer` 路由 `POST /jira/api/search`（凭据 + curl 查 JIRA） |
+| `profile-package/lib/client.js` | Client：`window.__ModuleLoader__.load({ id, factory })` 标准 web bundle（浏览器 `fetch` 调 Host 路由） |
+
+### 安装步骤
+
+1. 把 `profile-package/` 复制为 `~/.dsh/profiles/desktop/packages/dsh-jira-tasks/`
+2. 编辑 `~/.dsh/profiles/desktop/package.json`：
+   - `dependencies` 增加：`"dsh-jira-tasks": "file:./packages/dsh-jira-tasks"`
+   - `dsh.profile.bundles` 追加：`"dsh-jira-tasks"`
+3. 在 profile 目录执行 `pnpm install`：
+
+   ```bash
+   cd ~/.dsh/profiles/desktop
+   "/Users/<你的用户名>/Library/Application Support/DSH Desktop/runtime-commands/bin/pnpm" install
+   ```
+
+   > 也可直接用 DSH 自带命令：`dsh plugin --profile desktop add dsh-jira-tasks`
+
+4. **重启 DSH**（profile 插件集与客户端 bundle 在启动时扫描加载）
+
+> 注意：`pnpm install` 会把包**复制**到 `node_modules/`（非符号链接），后续改动 `packages/dsh-jira-tasks/lib/client.js` 后需手动同步 `node_modules/dsh-jira-tasks/lib/client.js`（或重跑 pnpm install）。
+
+### 与动态版的差异
+
+| 维度 | 动态插件 | 正式安装 |
+|---|---|---|
+| 持久性 | 重启丢失（进程内存） | 重启保留（profile bundle） |
+| Client→Host 通信 | `host.call` / `harness.handle` | `webServer` 路由 + 浏览器 `fetch` |
+| 客户端 bundle | 会话内注入 | `/plugins/dsh-jira-tasks/client.js`（ModuleLoader 格式） |
+| 配置 / 凭据 | 同一 `localStorage` 键、同一 `.credentials.yaml` | 完全相同 |
+
+### 卸载
+
+- 从 profile `package.json` 移除 `dsh-jira-tasks` 依赖与 bundles 条目；删除 `packages/dsh-jira-tasks` 与 `node_modules/dsh-jira-tasks`；执行 `pnpm install`；重启 DSH
+- 或使用 `dsh plugin --profile desktop remove dsh-jira-tasks`
 
 ---
 

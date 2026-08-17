@@ -1,0 +1,11 @@
+# dsh-jira-tasks — bundle patch layer.
+# Mounts the host half into the profile composition. The inject list makes the
+# loader wait until these services are ready before activating the plugin.
+- insert:
+    - id: jira-tasks
+      name: 'dsh-jira-tasks'
+      inject:
+        - subprocess
+        - credentials
+        - sandboxPolicy
+        - webServer
