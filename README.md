@@ -1,5 +1,7 @@
 # JIRA 开启任务面板（DeepSeek Harness 插件）
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **中文** · [English](README.en.md)
 
 在 DSH 会话**输入框下方**展示当前 JIRA 项目**指派给当前用户**的「开启 / 重新开启」任务列表。JIRA 地址与令牌从凭据读取；项目 Key 与 JQL **按工作区配置**并持久化。
