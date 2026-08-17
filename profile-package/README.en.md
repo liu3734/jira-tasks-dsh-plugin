@@ -1,5 +1,7 @@
 # JIRA Open Tasks Panel (DeepSeek Harness Plugin)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 [中文](README.md) · **English**
 
 Shows the current JIRA project's **open / reopened** issues **assigned to the current user** below the DSH composer input. The JIRA base URL and token are read from credentials; the project key and JQL are **configured per workspace** and persisted.

@@ -1,5 +1,7 @@
 # JIRA 开启任务面板（DeepSeek Harness 插件）
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **中文** · [English](README.en.md)
 
 在 DSH 会话**输入框下方**展示当前 JIRA 项目**指派给当前用户**的「开启 / 重新开启」任务列表。JIRA 地址与令牌从凭据读取；项目 Key 与 JQL **按工作区配置**并持久化。
@@ -7,6 +9,10 @@
 ## 功能
 
 - 📋 新会话与活跃会话的输入框下方均展示任务面板（新会话时与输入框等宽）
+
+<img width="1898" height="886" alt="image" src="https://github.com/user-attachments/assets/d14d0bd4-4f9f-4aa8-9af8-b8a02a2b7296" />
+<img width="1972" height="746" alt="image" src="https://github.com/user-attachments/assets/9f543e04-a5ad-4b86-85c8-baa2de26f44e" />
+
 - 👤 默认仅显示当前用户（`assignee = currentUser()`）的「开启 / 重新开启」任务
 - ⚙️ 项目 Key 与 JQL 按工作区保存；未配置的工作区显示"未配置"
 - 🔄 打开新会话自动查询，面板内支持一键刷新（⟳）
