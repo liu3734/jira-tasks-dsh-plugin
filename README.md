@@ -24,7 +24,7 @@
 包已发布到 npm：
 
 ```bash
-dsh plugin --profile desktop add dsh-jira-tasks
+dsh plugin --profile web add dsh-jira-tasks
 ```
 
 **重启 DSH** 后生效。
@@ -32,8 +32,8 @@ dsh plugin --profile desktop add dsh-jira-tasks
 <details>
 <summary>手动安装（不使用 npm）</summary>
 
-1. 将仓库 `profile-package/` 复制为 `~/.dsh/profiles/desktop/packages/dsh-jira-tasks/`
-2. 编辑 `~/.dsh/profiles/desktop/package.json`：
+1. 将仓库 `profile-package/` 复制为 `~/.dsh/profiles/web/packages/dsh-jira-tasks/`
+2. 编辑 `~/.dsh/profiles/web/package.json`：
    - `dependencies` 增加：`"dsh-jira-tasks": "file:./packages/dsh-jira-tasks"`
    - `dsh.profile.bundles` 追加：`"dsh-jira-tasks"`
 3. 在 profile 目录执行 `pnpm install`
@@ -80,7 +80,7 @@ project = "{projectKey}" AND status in ("开启", "重新开启") AND assignee =
 ## 卸载
 
 ```bash
-dsh plugin --profile desktop remove dsh-jira-tasks
+dsh plugin --profile web remove dsh-jira-tasks
 ```
 
 ## 常见问题

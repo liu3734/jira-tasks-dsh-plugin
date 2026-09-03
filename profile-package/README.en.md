@@ -20,7 +20,7 @@ Shows the current JIRA project's **open / reopened** issues **assigned to the cu
 Published to npm:
 
 ```bash
-dsh plugin --profile desktop add dsh-jira-tasks
+dsh plugin --profile web add dsh-jira-tasks
 ```
 
 **Restart DSH** to activate.
@@ -28,8 +28,8 @@ dsh plugin --profile desktop add dsh-jira-tasks
 <details>
 <summary>Manual install (without npm)</summary>
 
-1. Copy the repo's `profile-package/` to `~/.dsh/profiles/desktop/packages/dsh-jira-tasks/`
-2. Edit `~/.dsh/profiles/desktop/package.json`:
+1. Copy the repo's `profile-package/` to `~/.dsh/profiles/web/packages/dsh-jira-tasks/`
+2. Edit `~/.dsh/profiles/web/package.json`:
    - Add to `dependencies`: `"dsh-jira-tasks": "file:./packages/dsh-jira-tasks"`
    - Append to `dsh.profile.bundles`: `"dsh-jira-tasks"`
 3. Run `pnpm install` in the profile directory
@@ -76,7 +76,7 @@ project = "{projectKey}" AND status in ("开启", "重新开启") AND assignee =
 ## Uninstall
 
 ```bash
-dsh plugin --profile desktop remove dsh-jira-tasks
+dsh plugin --profile web remove dsh-jira-tasks
 ```
 
 ## Troubleshooting
