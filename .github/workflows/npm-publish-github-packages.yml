@@ -1,4 +1,5 @@
-# Publish dsh-jira-tasks to the public npm registry when a release is created
+# Publish dsh-jira-tasks to the public npm registry and to GitHub Packages
+# when a release is created (or manually dispatched).
 # The package lives in profile-package/, so all steps run there.
 # Requires the repository secret NPM_TOKEN (an npmjs.org access token).
 
@@ -7,6 +8,7 @@ name: Publish npm package
 on:
   release:
     types: [created]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -29,6 +31,7 @@ jobs:
         working-directory: profile-package
     permissions:
       contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,6 +39,22 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org/
       - run: npm install
-      - run: npm publish
+      - name: Publish to npmjs.org
+        run: |
+          npm publish 2>/tmp/npmjs-publish.log || {
+            # 幂等：版本已发布（手动重跑时）视为成功
+            grep -qE "You cannot publish over the previously published versions|EPUBLISHCONFLICT" /tmp/npmjs-publish.log && {
+              echo "npmjs.org: version already exists, skip publish"
+              exit 0
+            }
+            cat /tmp/npmjs-publish.log
+            exit 1
+          }
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to GitHub Packages
+        run: |
+          npm config set //npm.pkg.github.com/:_authToken "${GITHUB_TOKEN}"
+          npm publish --registry https://npm.pkg.github.com
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
