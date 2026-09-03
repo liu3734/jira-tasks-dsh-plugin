@@ -16,18 +16,22 @@
 - 👤 默认仅显示当前用户（`assignee = currentUser()`）的「开启 / 重新开启」任务
 - ⚙️ 项目 Key 与 JQL 按工作区保存；未配置的工作区显示"未配置"
 - 🔄 打开新会话自动查询，面板内支持一键刷新（⟳）
+- 🧭 点击标题可**收起 / 展开**面板；标题徽标显示查询命中的任务总数（列表最多展示 50 条，按更新时间倒序）
+- 🏷️ 每条任务附状态徽章（按状态分类着色：新建 / 进行中 / 其他）、优先级与类型标签
 - 🔗 任务可点击，在新标签页打开 JIRA 详情
 - 🎨 颜色使用 DSH 主题令牌，浅色 / 深色主题自适应
 
 ## 安装
 
-包已发布到 npm：
+包已发布到公共 npm（`dsh-jira-tasks`）；仓库的发布工作流同时把同一版本发布到 GitHub Packages（作用域包名 `@liu3734/dsh-jira-tasks`）。从 npm 安装（推荐）：
 
 ```bash
 dsh plugin --profile web add dsh-jira-tasks
 ```
 
 **重启 DSH** 后生效。
+
+> 若改用 GitHub Packages 源：先在 profile 的 `.npmrc` 配置 `@liu3734:registry=https://npm.pkg.github.com/` 及读取令牌，再执行 `dsh plugin --profile web add @liu3734/dsh-jira-tasks`。
 
 <details>
 <summary>手动安装（不使用 npm）</summary>
@@ -88,11 +92,15 @@ dsh plugin --profile web remove dsh-jira-tasks
 <details>
 <summary>面板显示「查询失败」</summary>
 
+面板中的提示位于「查询失败：」之后，与下列文案对应：
+
 | 提示 | 处理 |
 |---|---|
-| 未配置环境变量 JIRA_BASE_URL | 凭据未写入，见上文「配置 1」 |
+| 未设置项目 Key | 面板未配置项目，点标题右侧 ⚙ 填写项目 Key |
+| 未配置环境变量 JIRA_BASE_URL（或 JIRA_URL） | 凭据未写入，见上文「配置 1」 |
+| 未配置环境变量 JIRA_API_TOKEN（或 JIRA_TOKEN） | 令牌未写入，见上文「配置 1」 |
 | 401 … | 令牌无效或认证方式不对；先 `curl -H "Authorization: Bearer <token>" <base>/rest/api/2/myself` 验证 |
-| 无法解析 JIRA 响应 | 网络 / 代理问题，curl 无输出 |
+| 无法解析 JIRA 响应：… | 网络 / 代理问题，curl 无输出 |
 </details>
 
 <details>
@@ -108,20 +116,20 @@ dsh plugin --profile web remove dsh-jira-tasks
 <summary>点击展开</summary>
 
 ```
-┌─────────── 浏览器（Client） ───────────┐      ┌──────────── Host ──────────────┐
-│ conversation.composer.dock（活跃会话）      │      │ webServer 路由 /jira/api/search │
-│ conversation.input.dock（新会话, order:99）│      │   ↓                            │
-│   ↓ 挂载时/刷新时 fetch POST               │      │ credentials.resolve(JIRA_*)     │
-│ 渲染：任务列表 / 错误 / 未配置               │      │ subprocess.spawn(curl …)        │
-│ localStorage 按工作区存取配置                │      │   ↓ stdout JSON                 │
-└────────────────────────────────────────────┘      │ 解析 issues → 返回 {ok,issues}  │
-                                                    └────────────────────────────────┘
+┌────────────────────────────────────────┐   ┌────────────────────────────────────┐
+│ conversation.composer.dock（活跃会话）  │   │ webServer 路由 /jira/api/search     │
+│ conversation.input.dock（新会话）       │   │ ↓                                   │
+│   面板 hero 布局（flex order:99）       │   │ credentials.resolve(JIRA_*)         │
+│   ↓ 挂载 / 刷新时 fetch POST            │   │ subprocess.spawn(curl …)            │
+│ 渲染：任务列表 / 错误 / 未配置          │   │ ↓ stdout JSON                       │
+│ localStorage 按工作区存取配置           │   │ 解析 issues → 返回 {ok,issues}      │
+└────────────────────────────────────────┘   └────────────────────────────────────┘
 ```
 
 - **Host**：注册 `webServer` 路由 `POST /jira/api/search`；凭据经 `credentials` 服务解析（环境变量 / `$DSH_HOME/.credentials.yaml`，热加载）；查询用 `subprocess` 直接 `spawn curl`，认证头经 stdin（`--config -`）传入，令牌不进入命令行参数。
-- **Client**：`window.__ModuleLoader__.load({ id, factory })` 标准 web bundle；注册 `conversation.composer.dock`（活跃会话）与 `conversation.input.dock`（新会话，flex `order: 99` 置于输入框下方、与输入框等宽）。
+- **Client**：`window.__ModuleLoader__.load({ id, factory })` 标准 web bundle；注册 `conversation.composer.dock`（活跃会话，注册 `order: 5`）与 `conversation.input.dock`（新会话，注册 `order: 10`）。新会话面板走 hero 布局：面板元素自身 `flex order: 99` 排在输入框之后下方，并以 `--dsh-composer-side-clearance` / `--dsh-composer-card-max-width` 与输入卡等宽。
 - **为什么不用 `shell` 服务**：`shell` 会套 `sandbox-exec`，部分 macOS 上不可用（`sandbox_apply: Operation not permitted`）；`subprocess` 是原始进程缝，无此问题。
-- **新会话显示**：DSH 壳在 hero（空白会话）阶段不渲染 `composer.dock`，故额外注册 `input.dock`，并用「会话是否已有消息」去重，避免双份面板。
+- **新会话显示**：DSH 壳在 hero（空白会话）阶段不渲染 `composer.dock`，故额外注册 `input.dock`，并用「会话是否已有消息」去重（新版 DSH 依据 `SessionSnapshot.blank`），避免双份面板。
 
 **与动态插件版的差异**
 
