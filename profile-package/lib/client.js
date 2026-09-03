@@ -7,10 +7,9 @@ window.__ModuleLoader__.load({
     var React = require("react");
     var h = React.createElement;
 
-    var CSS = ".jt-root{box-sizing:border-box;width:100%;padding:2px 8px 6px;flex:none;display:flex;flex-direction:column}"
+    var CSS = ".jt-root{box-sizing:border-box;width:100%;padding:2px 0 6px;flex:none;display:flex;flex-direction:column}"
       + ".jt-hero{order:99;padding:0 var(--dsh-composer-side-clearance, 16px)}"
-      + ".jt-hero .jt-panel{width:100%;max-width:var(--dsh-composer-card-max-width, 780px);margin:0 auto;box-sizing:border-box}"
-      + ".jt-panel{border:1px solid var(--dsw-alias-border-l1, rgba(127,127,127,.28));background:var(--dsw-alias-bg-layer-1, rgba(127,127,127,.07));border-radius:10px;overflow:hidden}"
+      + ".jt-panel{box-sizing:border-box;width:100%;max-width:var(--dsh-composer-card-max-width, 780px);margin:0 auto;border:1px solid var(--dsw-alias-border-l1, rgba(127,127,127,.28));background:var(--dsw-alias-bg-layer-1, rgba(127,127,127,.07));border-radius:10px;overflow:hidden}"
       + ".jt-header{display:flex;align-items:center;gap:8px;min-height:30px;padding:2px 6px 2px 4px}"
       + ".jt-toggle{display:flex;align-items:center;gap:6px;flex:1;min-width:0;background:none;border:none;cursor:pointer;color:var(--dsw-alias-label-primary, #222);padding:4px 6px;border-radius:6px;font-size:12px;text-align:left}"
       + ".jt-toggle:hover{background:var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.1))}"
@@ -87,10 +86,12 @@ window.__ModuleLoader__.load({
       persistAll(all);
     }
 
+    // 新版 DSH：SessionSnapshot.blank 是“会话日志为空”的规范标记；旧版 DSH：消息位于 chat.timeline / chat.legacy.nodes。
     function hasMessages(session) {
-      if (!session || !session.chat) return false;
-      if (session.chat.timeline && session.chat.timeline.length > 0) return true;
-      if (session.chat.legacy && session.chat.legacy.nodes && session.chat.legacy.nodes.length > 0) return true;
+      if (!session) return false;
+      if (typeof session.blank === "boolean") return !session.blank;
+      if (session.chat && session.chat.timeline && session.chat.timeline.length > 0) return true;
+      if (session.chat && session.chat.legacy && session.chat.legacy.nodes && session.chat.legacy.nodes.length > 0) return true;
       return false;
     }
 
