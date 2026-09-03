@@ -54,6 +54,9 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Publish to GitHub Packages
         run: |
+          # GitHub npm 仓库只接受 @owner/name 作用域包名（无作用域会 404），
+          # 这里仅为此仓库改名，不影响 npmjs.org 上的 dsh-jira-tasks
+          npm pkg set name=@liu3734/dsh-jira-tasks
           npm config set //npm.pkg.github.com/:_authToken "${GITHUB_TOKEN}"
           npm publish --registry https://npm.pkg.github.com
         env:
