@@ -117,6 +117,49 @@ export default {
       return { exitCode: outcome.exitCode, stdout, stderr };
     }
 
+    // 从 JIRA 错误响应体/curl stderr 中提取可读信息。
+    function errorTextFrom(body, stderr, fallback) {
+      let message = (stderr || '').trim() || fallback;
+      try {
+        const parsed = JSON.parse(body);
+        if (parsed.errorMessages && parsed.errorMessages.length) message = parsed.errorMessages.join('；');
+        else if (parsed.message) message = parsed.message;
+      } catch (e) { /* body 非 JSON */ }
+      return message;
+    }
+
+    // 连通性/鉴权探测：GET /rest/api/2/myself，stdout 末尾追加 HTTP 状态码。
+    async function probeJira(baseUrl, token) {
+      const auth = buildAuthHeader(token);
+      const cleanBase = baseUrl.replace(/\/+$/, '');
+      let curl;
+      try {
+        curl = await subprocess.resolveExecutable('curl');
+      } catch (e) {
+        curl = '/usr/bin/curl';
+      }
+      const handle = subprocess.spawn({
+        argv: [
+          curl, '-sS', '--max-time', '15',
+          '-H', 'Accept: application/json',
+          '--config', '-',
+          '-w', '\n%{http_code}',
+          cleanBase + '/rest/api/2/myself'
+        ],
+        cwd: workspaceRoot,
+        stdio: {
+          stdin: { data: 'header = "Authorization: ' + auth + '"\n' },
+          stdout: { maxBytes: 1024 * 1024, spill: { maxBytes: 4 * 1024 * 1024 } },
+          stderr: { maxBytes: 256 * 1024, spill: { maxBytes: 1024 * 1024 } }
+        },
+        graceMs: 5000
+      });
+      const outcome = await handle.done;
+      const stdout = (handle.collected.stdout ? handle.collected.stdout.readFrom(0).text : '') || '';
+      const stderr = (handle.collected.stderr ? handle.collected.stderr.readFrom(0).text : '') || '';
+      return { exitCode: outcome.exitCode, stdout, stderr };
+    }
+
     async function handleSearch(args) {
       const projectKey = String((args && args.projectKey) || '').trim();
       if (!projectKey) return { ok: false, error: '未设置项目 Key' };
@@ -132,13 +175,7 @@ export default {
         const stderr = raw.stderr;
 
         if (raw.exitCode !== 0) {
-          let message = stderr.trim() || ('curl 退出码 ' + String(raw.exitCode));
-          try {
-            const parsed = JSON.parse(stdout);
-            if (parsed.errorMessages && parsed.errorMessages.length) message = parsed.errorMessages.join('；');
-            else if (parsed.message) message = parsed.message;
-          } catch (e) { /* stdout 非 JSON */ }
-          return { ok: false, error: message };
+          return { ok: false, error: errorTextFrom(stdout, stderr, 'curl 退出码 ' + String(raw.exitCode)) };
         }
 
         let data;
@@ -169,6 +206,43 @@ export default {
       }
     }
 
+    // 设置卡片“测试连接”：用草稿值（未保存也可测）或已保存/环境配置探测 JIRA。
+    async function handleTest(args) {
+      try {
+        const draftBase = args && typeof args.baseUrl === 'string' ? args.baseUrl.trim() : '';
+        const draftToken = args && typeof args.token === 'string' ? args.token.trim() : '';
+        const baseUrl = draftBase || settingsBaseUrl() || await resolveFirst(['JIRA_BASE_URL', 'JIRA_URL']);
+        if (!baseUrl) return { ok: false, code: 'unconfigured', error: '未配置 JIRA 地址' };
+        const token = draftToken || await resolveFirst(['JIRA_API_TOKEN', 'JIRA_TOKEN']);
+        if (!token) return { ok: false, code: 'unconfigured', error: '未配置 JIRA 令牌' };
+
+        const raw = await probeJira(baseUrl, token);
+        if (raw.exitCode !== 0) {
+          return { ok: false, code: 'network', error: (raw.stderr || '').trim() || ('curl 退出码 ' + String(raw.exitCode)) };
+        }
+        const nl = raw.stdout.lastIndexOf('\n');
+        const body = nl === -1 ? raw.stdout : raw.stdout.slice(0, nl);
+        const httpCode = Number((nl === -1 ? '' : raw.stdout.slice(nl + 1)).trim()) || 0;
+
+        if (httpCode >= 200 && httpCode < 300) {
+          let data = {};
+          try { data = JSON.parse(body); } catch (e) { /* 空/非 JSON 也视为连通 */ }
+          return {
+            ok: true,
+            baseUrl: baseUrl.replace(/\/+$/, ''),
+            user: data.displayName || data.name || data.key || ''
+          };
+        }
+        return {
+          ok: false,
+          code: httpCode === 401 || httpCode === 403 ? 'auth' : 'http',
+          error: errorTextFrom(body, raw.stderr, 'HTTP ' + String(httpCode))
+        };
+      } catch (err) {
+        return { ok: false, code: 'error', error: String((err && err.message) || err) };
+      }
+    }
+
     if (webServer && typeof webServer.register === 'function') {
       webServer.register({
         kind: 'exact',
@@ -178,6 +252,17 @@ export default {
             sendJson(res, await handleSearch(await readBody(req)));
           } catch (e) {
             sendJson(res, { ok: false, error: String((e && e.message) || e) });
+          }
+        }
+      });
+      webServer.register({
+        kind: 'exact',
+        path: '/jira/api/test',
+        handler: async (req, res) => {
+          try {
+            sendJson(res, await handleTest(await readBody(req)));
+          } catch (e) {
+            sendJson(res, { ok: false, code: 'error', error: String((e && e.message) || e) });
           }
         }
       });

@@ -47,7 +47,12 @@ window.__ModuleLoader__.load({
       + ".jt-set-card{box-sizing:border-box;list-style:none;margin:0;border:1px solid var(--dsw-alias-border-l1, rgba(127,127,127,.28));background:var(--dsw-alias-bg-layer-1, rgba(127,127,127,.05));border-radius:10px;padding:10px 12px}"
       + ".jt-set-head{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}"
       + ".jt-set-title{font-weight:600;font-size:13px;color:var(--dsw-alias-label-primary, #222)}"
-      + ".jt-set-desc{font-size:12px;color:var(--dsw-alias-label-secondary, #666);line-height:1.6}";
+      + ".jt-set-desc{font-size:12px;color:var(--dsw-alias-label-secondary, #666);line-height:1.6}"
+      + ".jt-probe{display:flex;align-items:center;gap:6px;margin:0 0 8px;font-size:12px;color:var(--dsw-alias-label-secondary, #666);line-height:1.6;word-break:break-word}"
+      + ".jt-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-label-secondary, #999)}"
+      + ".jt-dot-ok{background:var(--dsw-alias-state-success-primary, #1a9d4f)}"
+      + ".jt-dot-fail{background:var(--dsw-alias-state-error-primary, #d93026)}"
+      + ".jt-dot-testing{background:var(--dsw-alias-state-warn-primary, #b76e00)}";
 
     var STORAGE_KEY = "dsh.jiraTasks.config.v1";
 
@@ -104,6 +109,15 @@ window.__ModuleLoader__.load({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectKey: projectKey, jql: jql })
+      }).then(function (r) { return r.json(); });
+    }
+
+    // 探测 JIRA 地址/令牌可用性；可选传入未保存的草稿值。
+    function testConnection(payload) {
+      return fetch("/jira/api/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload || {})
       }).then(function (r) { return r.json(); });
     }
 
@@ -313,12 +327,21 @@ window.__ModuleLoader__.load({
         var busy = busyState[0], setBusy = busyState[1];
         var failedState = React.useState("");
         var failed = failedState[0], setFailed = failedState[1];
+        var probeState = React.useState({ phase: "idle" });
+        var probe = probeState[0], setProbe = probeState[1];
+        var probeGen = React.useRef(0);
 
         React.useEffect(function () {
           var alive = true;
           readTokenInfo().then(function (info) { if (alive) setTokenInfo(info); });
           return function () { alive = false; };
         }, []);
+
+        // 自动测试：命名空间就绪后、以及已保存配置变更（含保存后）时各探测一次。
+        React.useEffect(function () {
+          if (snapshot.status !== "ready") return;
+          runProbe({});
+        }, [snapshot.status, snapshot.revision]);
 
         var storedBase = snapshot.value && typeof snapshot.value.baseUrl === "string" ? snapshot.value.baseUrl : "";
         var baseValue = baseEdit === undefined ? storedBase : baseEdit;
@@ -364,9 +387,27 @@ window.__ModuleLoader__.load({
           setFailed("");
         }
 
+        // 探测连接：payload 传入即测草稿，传空对象则测已保存/环境配置。
+        function runProbe(payload) {
+          var gen = ++probeGen.current;
+          setProbe({ phase: "testing", message: "正在测试连接…" });
+          testConnection(payload).then(function (res) {
+            if (gen !== probeGen.current) return;
+            if (res && res.ok) setProbe({ phase: "ok", message: "可用" + (res.user ? "：" + res.user : "") });
+            else if (res && res.code === "unconfigured") setProbe({ phase: "idle", message: "未配置地址或令牌" });
+            else setProbe({ phase: "fail", message: (res && res.error) || "不可用" });
+          }).catch(function (err) {
+            if (gen !== probeGen.current) return;
+            setProbe({ phase: "fail", message: String((err && err.message) || err) });
+          });
+        }
+
         var tokenHint = tokenInfo === null
           ? "正在读取令牌状态…"
           : (tokenInfo.configured ? "令牌已配置；留空并保存可保持不变。" : "令牌未配置。含 “:” 时用 Basic，否则用 Bearer。");
+        var dotClass = probe.phase === "ok" ? "jt-dot jt-dot-ok"
+          : probe.phase === "fail" ? "jt-dot jt-dot-fail"
+            : probe.phase === "testing" ? "jt-dot jt-dot-testing" : "jt-dot";
 
         return h("li", { className: "jt-set-card" },
           h("div", { className: "jt-set-head" },
@@ -400,8 +441,19 @@ window.__ModuleLoader__.load({
             })
           ),
           h("div", { className: "jt-hint", style: { marginBottom: "8px" } }, tokenHint),
+          h("div", { className: "jt-probe", role: "status" },
+            h("span", { className: dotClass, "aria-hidden": "true" }),
+            h("span", null, probe.message || "未测试")
+          ),
           failed ? h("div", { className: "jt-error", style: { marginBottom: "8px" } }, "保存失败：" + failed) : null,
           h("div", { className: "jt-buttons" },
+            h("button", {
+              className: "jt-btn",
+              style: { marginRight: "auto" },
+              disabled: busy || probe.phase === "testing",
+              title: "用当前填写的内容测试 JIRA 地址与令牌",
+              onClick: function () { runProbe({ baseUrl: baseValue, token: (tokenDraft || "").trim() }); }
+            }, probe.phase === "testing" ? "测试中…" : "测试连接"),
             h("button", { className: "jt-btn", disabled: !dirty || busy, onClick: discard }, "放弃"),
             h("button", { className: "jt-btn jt-btn-primary", disabled: !dirty || busy || !writable, onClick: save }, busy ? "保存中…" : "保存")
           )

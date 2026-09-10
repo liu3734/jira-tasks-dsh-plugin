@@ -24,9 +24,10 @@
     },
     "profileBundle": {
       "packageName": "dsh-jira-tasks",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "profileDir": "$DSH_HOME/profiles/web",
       "route": "POST /jira/api/search",
+      "testRoute": "POST /jira/api/test",
       "files": {
         "package": "profile-package/package.json",
         "patch": "profile-package/cordis.patch.yml",

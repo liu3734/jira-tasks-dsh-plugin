@@ -11,6 +11,7 @@ Shows the current JIRA project's **open / reopened** issues **assigned to the cu
 - 📋 Panel shown below the composer in both new and active sessions (aligned with the input width in new sessions)
 - 👤 Defaults to the current user (`assignee = currentUser()`) with status `开启 / 重新开启` (Open / Reopened)
 - ⚙️ **Settings → Plugins → JIRA** edits the base URL and access token (the token is written to the credential store and never sent back to the browser)
+- 🟢 The card auto-probes the connection and shows a status light: green = usable, red = unusable, grey = unconfigured; **Test connection** verifies unsaved drafts immediately
 - ⚙️ Project key and JQL are saved per workspace; unconfigured workspaces show "unconfigured"
 - 🔄 Auto-query on every new session, with a one-click refresh (⟳)
 - 🔗 Click an issue to open its JIRA detail in a new tab
@@ -55,6 +56,14 @@ Open **Settings → Plugins → Plugin configuration → JIRA** and fill in:
 - **Access token / PAT**: written to the credential store (`$DSH_HOME/.credentials.yaml`); the browser only ever sees "configured", never the token itself
 
 Leaving the token blank on save keeps the existing one; clearing the address on save removes the override and falls back to the environment. Auth is auto-detected: tokens containing `:` use Basic, otherwise Bearer (JIRA PAT).
+
+#### Connection test
+
+The card's footer carries a status light and a **Test connection** button:
+
+- Opening the card **auto-probes** once (against JIRA `/rest/api/2/myself`), and saving re-probes
+- **Green** = address and token work (the current user is shown); **red** = unusable (JIRA's reason, e.g. 401, is shown); **grey** = address or token not configured
+- **Test connection** probes what is currently in the fields, saved or not, so you can check before saving
 
 Environment variables / credentials still work as a **fallback** (used when the settings card is empty), hot-reloaded without a restart:
 
