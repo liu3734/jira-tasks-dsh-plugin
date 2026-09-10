@@ -1,6 +1,6 @@
 {
   "name": "dsh-jira-tasks",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "JIRA open tasks panel for DeepSeek Harness (DSH): shows the current user's open/reopened issues below the composer, per-workspace project key, persistent profile bundle.",
   "type": "module",
   "main": "lib/index.js",
@@ -8,6 +8,9 @@
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
     "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.2"
   },
   "files": [
     "lib",
@@ -36,7 +39,9 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-ui-conversation"
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-api-remotes"
       ]
     }
   }

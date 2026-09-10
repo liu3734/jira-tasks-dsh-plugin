@@ -1,9 +1,25 @@
 /**
  * dsh-jira-tasks — HOST half (persistent profile plugin).
- * Serves POST /jira/api/search: reads JIRA_BASE_URL / JIRA_API_TOKEN via the
- * credentials service, queries JIRA /rest/api/2/search through subprocess+curl
- * (auth header via stdin --config -), returns normalized issue JSON.
+ * Serves POST /jira/api/search: reads the JIRA base URL from the `jira-tasks`
+ * settings namespace and the token from the credentials service (falling back
+ * to JIRA_BASE_URL / JIRA_API_TOKEN for existing setups), queries JIRA
+ * /rest/api/2/search through subprocess+curl (auth header via stdin
+ * --config -), returns normalized issue JSON.
  */
+import z from '@deepseek-ai/schemastery';
+
+/** Settings namespace exposing the editable connection fields in the GUI. */
+const SETTINGS_NS = 'jira-tasks';
+
+/**
+ * Durable connection schema. `baseUrl` is a plain readable field; the token is
+ * deliberately NOT stored here — it stays in the credentials store (write-only
+ * from the client) so no secret ever lands in settings.yaml.
+ */
+const JiraSettingsSchema = z.object({
+  baseUrl: z.string().default('').description('JIRA 地址，例如 http://jira.example.com/')
+});
+
 export default {
   inject: ['subprocess', 'credentials', 'sandboxPolicy', 'webServer'],
   apply(ctx) {
@@ -37,6 +53,24 @@ export default {
         } catch (e) { /* try next */ }
       }
       return undefined;
+    }
+
+    // Register the GUI-editable section when the optional settings service is
+    // composed; without it the plugin keeps working from the composition/env.
+    ctx.inject(['settings'], (settingsCtx) => {
+      settingsCtx.settings.register(SETTINGS_NS, JiraSettingsSchema);
+    });
+
+    /** Base URL from the settings document, or '' when unset/unavailable. */
+    function settingsBaseUrl() {
+      try {
+        const settings = ctx.get('settings');
+        if (!settings) return '';
+        const section = settings.get(SETTINGS_NS);
+        return section && typeof section.baseUrl === 'string' ? section.baseUrl.trim() : '';
+      } catch (e) {
+        return '';
+      }
     }
 
     function buildAuthHeader(token) {
@@ -87,10 +121,10 @@ export default {
       const projectKey = String((args && args.projectKey) || '').trim();
       if (!projectKey) return { ok: false, error: '未设置项目 Key' };
       try {
-        const baseUrl = await resolveFirst(['JIRA_BASE_URL', 'JIRA_URL']);
-        if (!baseUrl) return { ok: false, error: '未配置环境变量 JIRA_BASE_URL（或 JIRA_URL）' };
+        const baseUrl = settingsBaseUrl() || await resolveFirst(['JIRA_BASE_URL', 'JIRA_URL']);
+        if (!baseUrl) return { ok: false, error: '未配置 JIRA 地址（设置 → 插件 → JIRA，或环境变量 JIRA_BASE_URL）' };
         const token = await resolveFirst(['JIRA_API_TOKEN', 'JIRA_TOKEN']);
-        if (!token) return { ok: false, error: '未配置环境变量 JIRA_API_TOKEN（或 JIRA_TOKEN）' };
+        if (!token) return { ok: false, error: '未配置 JIRA 令牌（设置 → 插件 → JIRA，或环境变量 JIRA_API_TOKEN）' };
 
         const jql = buildJql(args && args.jql ? String(args.jql) : '', projectKey);
         const raw = await queryJira(baseUrl, token, jql);

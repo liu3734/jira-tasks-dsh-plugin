@@ -4,7 +4,7 @@
 
 **中文** · [English](README.en.md)
 
-在 DSH 会话**输入框下方**展示当前 JIRA 项目**指派给当前用户**的「开启 / 重新开启」任务列表。JIRA 地址与令牌从凭据读取；项目 Key 与 JQL **按工作区配置**并持久化。
+在 DSH 会话**输入框下方**展示当前 JIRA 项目**指派给当前用户**的「开启 / 重新开启」任务列表。JIRA 地址与令牌在**设置 → 插件 → JIRA** 中配置（`JIRA_BASE_URL` / `JIRA_API_TOKEN` 作为回退）；项目 Key 与 JQL **按工作区配置**并持久化。
 
 ## 功能
 
@@ -14,20 +14,25 @@
 <img width="1972" height="746" alt="image" src="https://github.com/user-attachments/assets/9f543e04-a5ad-4b86-85c8-baa2de26f44e" />
 
 - 👤 默认仅显示当前用户（`assignee = currentUser()`）的「开启 / 重新开启」任务
+- ⚙️ **设置 → 插件 → JIRA** 配置 JIRA 地址与访问令牌（令牌写入凭据存储，不回传前端）
 - ⚙️ 项目 Key 与 JQL 按工作区保存；未配置的工作区显示"未配置"
 - 🔄 打开新会话自动查询，面板内支持一键刷新（⟳）
+- 🧭 点击标题可**收起 / 展开**面板；标题徽标显示查询命中的任务总数（列表最多展示 50 条，按更新时间倒序）
+- 🏷️ 每条任务附状态徽章（按状态分类着色：新建 / 进行中 / 其他）、优先级与类型标签
 - 🔗 任务可点击，在新标签页打开 JIRA 详情
 - 🎨 颜色使用 DSH 主题令牌，浅色 / 深色主题自适应
 
 ## 安装
 
-包已发布到 npm：
+包已发布到公共 npm（`dsh-jira-tasks`）；仓库的发布工作流同时把同一版本发布到 GitHub Packages（作用域包名 `@liu3734/dsh-jira-tasks`）。从 npm 安装（推荐）：
 
 ```bash
 dsh plugin --profile web add dsh-jira-tasks
 ```
 
 **重启 DSH** 后生效。
+
+> 若改用 GitHub Packages 源：先在 profile 的 `.npmrc` 配置 `@liu3734:registry=https://npm.pkg.github.com/` 及读取令牌，再执行 `dsh plugin --profile web add @liu3734/dsh-jira-tasks`。
 
 <details>
 <summary>手动安装（不使用 npm）</summary>
@@ -52,7 +57,14 @@ dsh plugin --profile web add dsh-jira-tasks
 
 ### 1. JIRA 地址与令牌
 
-写入 `$DSH_HOME/.credentials.yaml`（推荐，热加载无需重启），或启动 DSH 前导出环境变量：
+打开 **设置 → 插件 → 插件配置 → JIRA**，填写：
+
+- **JIRA 地址**：如 `http://jira.example.com/`（存入用户设置文档，可在界面回读）
+- **访问令牌 / PAT**：写入凭据存储（`$DSH_HOME/.credentials.yaml`），前端只显示"已配置"，不回传令牌本身
+
+留空并保存会保持已有令牌不变；地址留空并保存则清除设置项，回退到环境变量。认证自动识别：令牌含 `:` 用 Basic，否则用 Bearer（JIRA PAT）。
+
+以下环境变量 / 凭据仍作为**回退**（设置页未配置时生效，兼容旧部署），热加载无需重启：
 
 ```yaml
 JIRA_BASE_URL: "http://jira.example.com/"
@@ -61,7 +73,6 @@ JIRA_API_TOKEN: "<PAT 或 user:token>"
 
 - 地址别名：`JIRA_BASE_URL` / `JIRA_URL`
 - 令牌别名：`JIRA_API_TOKEN` / `JIRA_TOKEN`
-- 认证自动识别：令牌含 `:` 用 Basic，否则用 Bearer（JIRA PAT）
 
 ### 2. 项目 Key 与 JQL（按工作区）
 
@@ -88,11 +99,15 @@ dsh plugin --profile web remove dsh-jira-tasks
 <details>
 <summary>面板显示「查询失败」</summary>
 
+面板中的提示位于「查询失败：」之后，与下列文案对应：
+
 | 提示 | 处理 |
 |---|---|
-| 未配置环境变量 JIRA_BASE_URL | 凭据未写入，见上文「配置 1」 |
+| 未设置项目 Key | 面板未配置项目，点标题右侧 ⚙ 填写项目 Key |
+| 未配置 JIRA 地址（设置 → 插件 → JIRA，或环境变量 JIRA_BASE_URL） | 地址未写入，见上文「配置 1」 |
+| 未配置 JIRA 令牌（设置 → 插件 → JIRA，或环境变量 JIRA_API_TOKEN） | 令牌未写入，见上文「配置 1」 |
 | 401 … | 令牌无效或认证方式不对；先 `curl -H "Authorization: Bearer <token>" <base>/rest/api/2/myself` 验证 |
-| 无法解析 JIRA 响应 | 网络 / 代理问题，curl 无输出 |
+| 无法解析 JIRA 响应：… | 网络 / 代理问题，curl 无输出 |
 </details>
 
 <details>
@@ -108,20 +123,21 @@ dsh plugin --profile web remove dsh-jira-tasks
 <summary>点击展开</summary>
 
 ```
-┌─────────── 浏览器（Client） ───────────┐      ┌──────────── Host ──────────────┐
-│ conversation.composer.dock（活跃会话）      │      │ webServer 路由 /jira/api/search │
-│ conversation.input.dock（新会话, order:99）│      │   ↓                            │
-│   ↓ 挂载时/刷新时 fetch POST               │      │ credentials.resolve(JIRA_*)     │
-│ 渲染：任务列表 / 错误 / 未配置               │      │ subprocess.spawn(curl …)        │
-│ localStorage 按工作区存取配置                │      │   ↓ stdout JSON                 │
-└────────────────────────────────────────────┘      │ 解析 issues → 返回 {ok,issues}  │
-                                                    └────────────────────────────────┘
+┌────────────────────────────────────────┐   ┌────────────────────────────────────┐
+│ conversation.composer.dock（活跃会话）  │   │ webServer 路由 /jira/api/search     │
+│ conversation.input.dock（新会话）       │   │ ↓                                   │
+│   面板 hero 布局（flex order:99）       │   │ settings.get("jira-tasks").baseUrl   │
+│   ↓ 挂载 / 刷新时 fetch POST            │   │ credentials.resolve(JIRA_API_TOKEN) │
+│ 渲染：任务列表 / 错误 / 未配置          │   │ subprocess.spawn(curl …)            │
+│ localStorage 按工作区存取项目 Key/JQL   │   │ ↓ stdout JSON                       │
+│ settings.plugin.item（设置页卡片）      │   │ 解析 issues → 返回 {ok,issues}      │
+└────────────────────────────────────────┘   └────────────────────────────────────┘
 ```
 
-- **Host**：注册 `webServer` 路由 `POST /jira/api/search`；凭据经 `credentials` 服务解析（环境变量 / `$DSH_HOME/.credentials.yaml`，热加载）；查询用 `subprocess` 直接 `spawn curl`，认证头经 stdin（`--config -`）传入，令牌不进入命令行参数。
-- **Client**：`window.__ModuleLoader__.load({ id, factory })` 标准 web bundle；注册 `conversation.composer.dock`（活跃会话）与 `conversation.input.dock`（新会话，flex `order: 99` 置于输入框下方、与输入框等宽）。
+- **Host**：注册 `settings` 命名空间 `jira-tasks`（`baseUrl`，可读）与 `webServer` 路由 `POST /jira/api/search`；地址优先读设置文档，令牌经 `credentials` 服务解析（设置页写入 / 环境变量 / `$DSH_HOME/.credentials.yaml`，热加载）；查询用 `subprocess` 直接 `spawn curl`，认证头经 stdin（`--config -`）传入，令牌不进入命令行参数。
+- **Client**：`window.__ModuleLoader__.load({ id, factory })` 标准 web bundle；注册 `conversation.composer.dock`（活跃会话，注册 `order: 5`）与 `conversation.input.dock`（新会话，注册 `order: 10`）。新会话面板走 hero 布局：面板元素自身 `flex order: 99` 排在输入框之后下方，并以 `--dsh-composer-side-clearance` / `--dsh-composer-card-max-width` 与输入卡等宽。另注册 `settings.plugin.item`（`key: "jira-tasks"`）作为设置页卡片：地址经 `settingsScope` 写入命名空间，令牌经 `remote.credentials` 写入凭据存储。
 - **为什么不用 `shell` 服务**：`shell` 会套 `sandbox-exec`，部分 macOS 上不可用（`sandbox_apply: Operation not permitted`）；`subprocess` 是原始进程缝，无此问题。
-- **新会话显示**：DSH 壳在 hero（空白会话）阶段不渲染 `composer.dock`，故额外注册 `input.dock`，并用「会话是否已有消息」去重，避免双份面板。
+- **新会话显示**：DSH 壳在 hero（空白会话）阶段不渲染 `composer.dock`，故额外注册 `input.dock`，并用「会话是否已有消息」去重（新版 DSH 依据 `SessionSnapshot.blank`），避免双份面板。
 
 **与动态插件版的差异**
 
@@ -130,7 +146,7 @@ dsh plugin --profile web remove dsh-jira-tasks
 | 持久性 | 重启丢失 | 重启保留 |
 | Client→Host 通信 | `host.call` / `harness.handle` | `webServer` 路由 + `fetch` |
 | 客户端 bundle | 会话内注入 | `/plugins/dsh-jira-tasks/client.js` |
-| 配置 / 凭据 | 同一 `localStorage` 键、同一 `.credentials.yaml` | 完全相同 |
+| 配置 / 凭据 | 仅环境变量 / `.credentials.yaml`（无设置页卡片） | 设置页卡片 + 同一 `.credentials.yaml` 回退 |
 </details>
 
 ## License

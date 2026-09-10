@@ -43,7 +43,11 @@ window.__ModuleLoader__.load({
       + ".jt-btn:hover{background:var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.1));opacity:1}"
       + ".jt-btn-primary{background:var(--dsw-alias-button-primary-fill, #2f6fed);border-color:transparent;color:var(--dsw-alias-label-primary-foreground, #fff)}"
       + ".jt-btn-primary:hover{background:var(--dsw-alias-button-primary-hover, #3a7bfd)}"
-      + ".jt-linklike{background:none;border:none;padding:0;cursor:pointer;color:var(--dsw-alias-brand-primary, #2f6fed);font-size:12px;text-decoration:underline}";
+      + ".jt-linklike{background:none;border:none;padding:0;cursor:pointer;color:var(--dsw-alias-brand-primary, #2f6fed);font-size:12px;text-decoration:underline}"
+      + ".jt-set-card{box-sizing:border-box;list-style:none;margin:0;border:1px solid var(--dsw-alias-border-l1, rgba(127,127,127,.28));background:var(--dsw-alias-bg-layer-1, rgba(127,127,127,.05));border-radius:10px;padding:10px 12px}"
+      + ".jt-set-head{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}"
+      + ".jt-set-title{font-weight:600;font-size:13px;color:var(--dsw-alias-label-primary, #222)}"
+      + ".jt-set-desc{font-size:12px;color:var(--dsw-alias-label-secondary, #666);line-height:1.6}";
 
     var STORAGE_KEY = "dsh.jiraTasks.config.v1";
 
@@ -264,6 +268,147 @@ window.__ModuleLoader__.load({
       );
     }
 
+    // ---- 设置页卡片：设置 → 插件 → JIRA ----
+    // 地址存 settings 命名空间（可读）；令牌写 credentials（永不随响应回传）。
+    var SETTINGS_NS = "jira-tasks";
+    var TOKEN_REF = "JIRA_API_TOKEN";
+    var TOKEN_REFS = ["JIRA_API_TOKEN", "JIRA_TOKEN"];
+
+    function useScopeSnapshot(scope) {
+      var state = React.useState(function () { return scope.getSnapshot(); });
+      var snapshot = state[0], setSnapshot = state[1];
+      React.useEffect(function () {
+        var update = function () { setSnapshot(scope.getSnapshot()); };
+        var off = scope.subscribe(update);
+        update();
+        return off;
+      }, []);
+      return snapshot;
+    }
+
+    function createJiraSettingsCard(scope, credentials) {
+      function readTokenInfo() {
+        return credentials.describe(TOKEN_REFS).then(function (res) {
+          if (!res || !res.ok || !res.value) return { configured: false, writable: false };
+          for (var i = 0; i < TOKEN_REFS.length; i++) {
+            var info = res.value[TOKEN_REFS[i]];
+            if (info && info.configured) return { configured: true, writable: info.writable !== false };
+          }
+          var primary = res.value[TOKEN_REF];
+          return { configured: false, writable: primary ? primary.writable !== false : true };
+        }).catch(function () {
+          return { configured: false, writable: false };
+        });
+      }
+
+      return function JiraSettingsCard() {
+        var snapshot = useScopeSnapshot(scope);
+        var tokenInfoState = React.useState(null);
+        var tokenInfo = tokenInfoState[0], setTokenInfo = tokenInfoState[1];
+        var baseEditState = React.useState(undefined);
+        var baseEdit = baseEditState[0], setBaseEdit = baseEditState[1];
+        var tokenDraftState = React.useState("");
+        var tokenDraft = tokenDraftState[0], setTokenDraft = tokenDraftState[1];
+        var busyState = React.useState(false);
+        var busy = busyState[0], setBusy = busyState[1];
+        var failedState = React.useState("");
+        var failed = failedState[0], setFailed = failedState[1];
+
+        React.useEffect(function () {
+          var alive = true;
+          readTokenInfo().then(function (info) { if (alive) setTokenInfo(info); });
+          return function () { alive = false; };
+        }, []);
+
+        var storedBase = snapshot.value && typeof snapshot.value.baseUrl === "string" ? snapshot.value.baseUrl : "";
+        var baseValue = baseEdit === undefined ? storedBase : baseEdit;
+        var dirty = (baseEdit !== undefined && baseEdit !== storedBase) || (tokenDraft || "").length > 0;
+        var writable = snapshot.writable !== false;
+
+        // 命名空间未挂载时不显示，避免留下一张无法操作的卡片。
+        if (snapshot.status === "unavailable") return null;
+
+        function save() {
+          if (busy || !dirty) return;
+          setBusy(true);
+          setFailed("");
+          var tasks = [];
+          if (baseEdit !== undefined && baseEdit !== storedBase) {
+            tasks.push(baseEdit === "" ? scope.unset("baseUrl") : scope.set("baseUrl", baseEdit));
+          }
+          var token = (tokenDraft || "").trim();
+          if (token) {
+            tasks.push(credentials.set(TOKEN_REF, token).then(function (res) {
+              if (res && res.ok === false) {
+                var err = res.error;
+                throw new Error((err && (err.message || err.code)) || "令牌保存失败");
+              }
+            }));
+          }
+          Promise.all(tasks).then(function () {
+            return readTokenInfo();
+          }).then(function (info) {
+            setTokenInfo(info);
+            setBaseEdit(undefined);
+            setTokenDraft("");
+            setBusy(false);
+          }).catch(function (err) {
+            setBusy(false);
+            setFailed(String((err && err.message) || err));
+          });
+        }
+
+        function discard() {
+          setBaseEdit(undefined);
+          setTokenDraft("");
+          setFailed("");
+        }
+
+        var tokenHint = tokenInfo === null
+          ? "正在读取令牌状态…"
+          : (tokenInfo.configured ? "令牌已配置；留空并保存可保持不变。" : "令牌未配置。含 “:” 时用 Basic，否则用 Bearer。");
+
+        return h("li", { className: "jt-set-card" },
+          h("div", { className: "jt-set-head" },
+            h("span", { className: "jt-set-title" }, "JIRA"),
+            h("span", { className: "jt-set-desc" }, "JIRA 地址与访问令牌。项目 Key / JQL 仍按工作区在会话面板的 ⚙ 中配置。")
+          ),
+          h("div", { className: "jt-field" },
+            h("label", { htmlFor: "jira-tasks-base-url" }, "JIRA 地址"),
+            h("input", {
+              id: "jira-tasks-base-url",
+              className: "jt-input",
+              value: baseValue,
+              placeholder: "http://jira.example.com/",
+              disabled: !writable || busy,
+              onChange: function (e) { setBaseEdit(e.target.value); },
+              onKeyDown: function (e) { if (e.key === "Enter") save(); }
+            })
+          ),
+          h("div", { className: "jt-field" },
+            h("label", { htmlFor: "jira-tasks-token" }, "访问令牌 / PAT"),
+            h("input", {
+              id: "jira-tasks-token",
+              className: "jt-input",
+              type: "password",
+              value: tokenDraft,
+              placeholder: tokenInfo && tokenInfo.configured ? "已配置，留空保持不变" : "粘贴令牌",
+              autoComplete: "off",
+              disabled: !writable || busy,
+              onChange: function (e) { setTokenDraft(e.target.value); },
+              onKeyDown: function (e) { if (e.key === "Enter") save(); }
+            })
+          ),
+          h("div", { className: "jt-hint", style: { marginBottom: "8px" } }, tokenHint),
+          failed ? h("div", { className: "jt-error", style: { marginBottom: "8px" } }, "保存失败：" + failed) : null,
+          h("div", { className: "jt-buttons" },
+            h("button", { className: "jt-btn", disabled: !dirty || busy, onClick: discard }, "放弃"),
+            h("button", { className: "jt-btn jt-btn-primary", disabled: !dirty || busy || !writable, onClick: save }, busy ? "保存中…" : "保存")
+          )
+        );
+      };
+    }
+
     function apply(ctx) {
       // ctx.effect(cb) 会立即执行 cb 并把其返回值作为卸载时的清理函数，
       // 所以样式注入必须放在回调内、返回移除函数，否则标签刚插入就被删除。
@@ -289,9 +434,19 @@ window.__ModuleLoader__.load({
           return h(JiraTasksDock, Object.assign({}, props, { blankOnly: true }));
         });
       });
+
+      // 设置页卡片：宿主注册了 jira-tasks 命名空间时，由插件配置 Tab 分发到本卡片。
+      var settingsScope = ctx.get("settingsScope");
+      var remote = ctx.get("remote");
+      if (settingsScope && remote && remote.credentials) {
+        var card = createJiraSettingsCard(settingsScope.bind({ namespace: SETTINGS_NS }), remote.credentials);
+        slots.inject("settings.plugin.item", function () {
+          return slots.register({ name: "settings.plugin.item", key: SETTINGS_NS }, card);
+        });
+      }
     }
 
-    exports.inject = ["slots"];
+    exports.inject = ["slots", "settingsScope", "remote", "remote.credentials"];
     exports.apply = apply;
     return module.exports;
   }

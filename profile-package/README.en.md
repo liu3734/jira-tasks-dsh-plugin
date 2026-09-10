@@ -4,12 +4,13 @@
 
 [中文](README.md) · **English**
 
-Shows the current JIRA project's **open / reopened** issues **assigned to the current user** below the DSH composer input. The JIRA base URL and token are read from credentials; the project key and JQL are **configured per workspace** and persisted.
+Shows the current JIRA project's **open / reopened** issues **assigned to the current user** below the DSH composer input. The JIRA base URL and token are configured in **Settings → Plugins → JIRA** (`JIRA_BASE_URL` / `JIRA_API_TOKEN` act as fallback); the project key and JQL are **configured per workspace** and persisted.
 
 ## Features
 
 - 📋 Panel shown below the composer in both new and active sessions (aligned with the input width in new sessions)
 - 👤 Defaults to the current user (`assignee = currentUser()`) with status `开启 / 重新开启` (Open / Reopened)
+- ⚙️ **Settings → Plugins → JIRA** edits the base URL and access token (the token is written to the credential store and never sent back to the browser)
 - ⚙️ Project key and JQL are saved per workspace; unconfigured workspaces show "unconfigured"
 - 🔄 Auto-query on every new session, with a one-click refresh (⟳)
 - 🔗 Click an issue to open its JIRA detail in a new tab
@@ -48,7 +49,14 @@ In a DSH session, use the Cordis tools: `cordis_define` (`kind: new`, `idPrefix:
 
 ### 1. JIRA base URL and token
 
-Write to `$DSH_HOME/.credentials.yaml` (recommended, hot-reloaded), or export environment variables before launching DSH:
+Open **Settings → Plugins → Plugin configuration → JIRA** and fill in:
+
+- **JIRA base URL**: e.g. `http://jira.example.com/` (stored in the user settings document and read back by the form)
+- **Access token / PAT**: written to the credential store (`$DSH_HOME/.credentials.yaml`); the browser only ever sees "configured", never the token itself
+
+Leaving the token blank on save keeps the existing one; clearing the address on save removes the override and falls back to the environment. Auth is auto-detected: tokens containing `:` use Basic, otherwise Bearer (JIRA PAT).
+
+Environment variables / credentials still work as a **fallback** (used when the settings card is empty), hot-reloaded without a restart:
 
 ```yaml
 JIRA_BASE_URL: "http://jira.example.com/"
@@ -57,7 +65,6 @@ JIRA_API_TOKEN: "<PAT or user:token>"
 
 - Base URL aliases: `JIRA_BASE_URL` / `JIRA_URL`
 - Token aliases: `JIRA_API_TOKEN` / `JIRA_TOKEN`
-- Auth is auto-detected: tokens containing `:` use Basic, otherwise Bearer (JIRA PAT)
 
 ### 2. Project key and JQL (per workspace)
 
@@ -86,7 +93,8 @@ dsh plugin --profile web remove dsh-jira-tasks
 
 | Message | Fix |
 |---|---|
-| JIRA_BASE_URL not configured | Credentials missing — see "Configuration 1" above |
+| JIRA base URL not configured | Address missing — see "Configuration 1" above |
+| JIRA token not configured | Token missing — see "Configuration 1" above |
 | 401 … | Invalid token or wrong auth scheme; verify with `curl -H "Authorization: Bearer <token>" <base>/rest/api/2/myself` |
 | Cannot parse JIRA response | Network / proxy issue, curl produced no output |
 </details>
@@ -107,15 +115,16 @@ dsh plugin --profile web remove dsh-jira-tasks
 ┌─────────── Browser (Client) ───────────┐      ┌──────────── Host ──────────────┐
 │ conversation.composer.dock (active)        │      │ webServer route /jira/api/search │
 │ conversation.input.dock (new, order:99)    │      │   ↓                            │
-│   ↓ on mount/refresh fetch POST            │      │ credentials.resolve(JIRA_*)     │
-│ render: list / error / unconfigured        │      │ subprocess.spawn(curl …)        │
-│ localStorage per-workspace config          │      │   ↓ stdout JSON                 │
+│   ↓ on mount/refresh fetch POST            │      │ settings.get("jira-tasks")      │
+│ render: list / error / unconfigured        │      │ credentials.resolve(JIRA_*)     │
+│ localStorage per-workspace key/JQL         │      │ subprocess.spawn(curl …)        │
+│ settings.plugin.item (Settings card)       │      │   ↓ stdout JSON                 │
 └────────────────────────────────────────────┘      │ parse issues → {ok,issues}      │
                                                     └────────────────────────────────┘
 ```
 
-- **Host**: registers a `webServer` route `POST /jira/api/search`; credentials resolved via the `credentials` service (env / `$DSH_HOME/.credentials.yaml`, hot-reloaded); queries run through `subprocess` spawning `curl` directly, with the auth header passed via stdin (`--config -`) so the token never appears in argv.
-- **Client**: a standard `window.__ModuleLoader__.load({ id, factory })` web bundle; registers `conversation.composer.dock` (active sessions) and `conversation.input.dock` (new sessions, flex `order: 99` below the input, aligned width).
+- **Host**: registers the `jira-tasks` settings namespace (`baseUrl`, readable) and a `webServer` route `POST /jira/api/search`; the address comes from the settings document, the token from the `credentials` service (Settings card / env / `$DSH_HOME/.credentials.yaml`, hot-reloaded); queries run through `subprocess` spawning `curl` directly, with the auth header passed via stdin (`--config -`) so the token never appears in argv.
+- **Client**: a standard `window.__ModuleLoader__.load({ id, factory })` web bundle; registers `conversation.composer.dock` (active sessions) and `conversation.input.dock` (new sessions, flex `order: 99` below the input, aligned width), plus `settings.plugin.item` (`key: "jira-tasks"`) for the Settings card — the address is written through `settingsScope` and the token through `remote.credentials`.
 - **Why not the `shell` service**: `shell` wraps commands with `sandbox-exec`, which is broken on some macOS versions (`sandbox_apply: Operation not permitted`); `subprocess` is the raw process seam without this issue.
 - **New-session display**: the DSH shell does not render `composer.dock` during the hero (blank session) phase, so the plugin also registers `input.dock` and de-duplicates by "session has messages".
 
@@ -126,7 +135,7 @@ dsh plugin --profile web remove dsh-jira-tasks
 | Persistence | Lost on restart | Survives restart |
 | Client→Host | `host.call` / `harness.handle` | `webServer` route + `fetch` |
 | Client bundle | Injected per session | `/plugins/dsh-jira-tasks/client.js` |
-| Config / credentials | Same `localStorage` key, same `.credentials.yaml` | Identical |
+| Config / credentials | Env / `.credentials.yaml` only (no Settings card) | Settings card + same `.credentials.yaml` fallback |
 </details>
 
 ## License
