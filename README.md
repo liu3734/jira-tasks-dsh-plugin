@@ -34,6 +34,12 @@
 dsh plugin --profile web add dsh-jira-tasks
 ```
 
+或直接从 GitHub 安装（仓库根即包目录，`lib/` 为预构建产物）：
+
+```bash
+dsh plugin --profile web add github:liu3734/jira-tasks-dsh-plugin
+```
+
 **重启 DSH** 后生效。
 
 > 若改用 GitHub Packages 源：先在 profile 的 `.npmrc` 配置 `@liu3734:registry=https://npm.pkg.github.com/` 及读取令牌，再执行 `dsh plugin --profile web add @liu3734/dsh-jira-tasks`。
@@ -41,7 +47,7 @@ dsh plugin --profile web add dsh-jira-tasks
 <details>
 <summary>手动安装（不使用 npm）</summary>
 
-1. 将仓库 `profile-package/` 复制为 `~/.dsh/profiles/web/packages/dsh-jira-tasks/`
+1. 将本仓库（仓库根目录即包目录）复制为 `~/.dsh/profiles/web/packages/dsh-jira-tasks/`（可忽略 `.git/`）
 2. 编辑 `~/.dsh/profiles/web/package.json`：
    - `dependencies` 增加：`"dsh-jira-tasks": "file:./packages/dsh-jira-tasks"`
    - `dsh.profile.bundles` 追加：`"dsh-jira-tasks"`

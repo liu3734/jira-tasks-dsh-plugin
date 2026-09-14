@@ -1,6 +1,7 @@
 # Publish dsh-jira-tasks to the public npm registry and to GitHub Packages
 # when a release is created (or manually dispatched).
-# The package lives in profile-package/, so all steps run there.
+# The package IS the repository root (package.json + cordis.patch.yml + lib/),
+# so that `dsh plugin add github:liu3734/jira-tasks-dsh-plugin` installs it.
 # Requires the repository secret NPM_TOKEN (an npmjs.org access token).
 
 name: Publish npm package
@@ -13,9 +14,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: profile-package
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,9 +24,6 @@ jobs:
   publish-npm:
     needs: build
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: profile-package
     permissions:
       contents: read
       packages: write

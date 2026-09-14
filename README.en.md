@@ -25,12 +25,18 @@ Published to npm:
 dsh plugin --profile web add dsh-jira-tasks
 ```
 
+Or straight from GitHub (the repository root is the package directory; `lib/` is prebuilt):
+
+```bash
+dsh plugin --profile web add github:liu3734/jira-tasks-dsh-plugin
+```
+
 **Restart DSH** to activate.
 
 <details>
 <summary>Manual install (without npm)</summary>
 
-1. Copy the repo's `profile-package/` to `~/.dsh/profiles/web/packages/dsh-jira-tasks/`
+1. Copy this repository (its root is the package directory) to `~/.dsh/profiles/web/packages/dsh-jira-tasks/` (skip `.git/`)
 2. Edit `~/.dsh/profiles/web/package.json`:
    - Add to `dependencies`: `"dsh-jira-tasks": "file:./packages/dsh-jira-tasks"`
    - Append to `dsh.profile.bundles`: `"dsh-jira-tasks"`

@@ -29,10 +29,10 @@
       "route": "POST /jira/api/search",
       "testRoute": "POST /jira/api/test",
       "files": {
-        "package": "profile-package/package.json",
-        "patch": "profile-package/cordis.patch.yml",
-        "host": "profile-package/lib/index.js",
-        "client": "profile-package/lib/client.js"
+        "package": "package.json",
+        "patch": "cordis.patch.yml",
+        "host": "lib/index.js",
+        "client": "lib/client.js"
       }
     }
   },
