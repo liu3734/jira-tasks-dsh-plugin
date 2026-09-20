@@ -24,7 +24,7 @@
     },
     "profileBundle": {
       "packageName": "dsh-jira-tasks",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "profileDir": "$DSH_HOME/profiles/web",
       "route": "POST /jira/api/search",
       "testRoute": "POST /jira/api/test",

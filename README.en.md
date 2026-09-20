@@ -63,6 +63,8 @@ Open **Settings → Plugins → Plugin configuration → JIRA** and fill in:
 
 Leaving the token blank on save keeps the existing one; clearing the address on save removes the override and falls back to the environment. Auth is auto-detected: tokens containing `:` use Basic, otherwise Bearer (JIRA PAT).
 
+> **A token supplied by the environment cannot be overwritten from this card.** If the environment that launched DSH already defines `JIRA_API_TOKEN` (a Windows *user-level* variable counts), DSH treats that reference as read-only: the card disables the token field and explains why. The panel already uses that variable, so **no save is needed**; to manage the token from settings instead, remove the variable first (Windows: System Properties → Environment Variables, or PowerShell `[Environment]::SetEnvironmentVariable('JIRA_API_TOKEN', $null, 'User')`) and restart DSH.
+
 #### Connection test
 
 The card's footer carries a status light and a **Test connection** button:
@@ -112,6 +114,20 @@ dsh plugin --profile web remove dsh-jira-tasks
 | JIRA token not configured | Token missing — see "Configuration 1" above |
 | 401 … | Invalid token or wrong auth scheme; verify with `curl -H "Authorization: Bearer <token>" <base>/rest/api/2/myself` |
 | Cannot parse JIRA response | Network / proxy issue, curl produced no output |
+</details>
+
+<details>
+<summary>Saving the token fails with "is supplied read-only by the launching environment"</summary>
+
+`JIRA_API_TOKEN` (or `JIRA_TOKEN`) is supplied by the environment that launched DSH, and DSH treats that reference as read-only: a write would be shadowed by the variable, so it is refused. The panel already uses that variable and queries fine, so **there is nothing to save**.
+
+To manage the token from the settings card instead, remove the variable and restart DSH:
+
+- Windows (PowerShell): `[Environment]::SetEnvironmentVariable('JIRA_API_TOKEN', $null, 'User')`, then reopen the terminal
+- Windows (GUI): System Properties → Advanced → Environment Variables, delete the user variable
+- macOS / Linux: remove the export from `~/.zshrc` / `~/.bashrc` (or equivalent) and reopen the terminal
+
+Since v1.0.7 the card detects a read-only token, disables the field, and shows this guidance inline instead of failing on save.
 </details>
 
 <details>

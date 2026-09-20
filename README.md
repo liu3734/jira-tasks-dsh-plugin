@@ -74,6 +74,8 @@ dsh plugin --profile web add github:liu3734/jira-tasks-dsh-plugin
 
 留空并保存会保持已有令牌不变；地址留空并保存则清除设置项，回退到环境变量。认证自动识别：令牌含 `:` 用 Basic，否则用 Bearer（JIRA PAT）。
 
+> **令牌已由环境变量提供时，设置页无法改写它**：若启动 DSH 的环境里已设置 `JIRA_API_TOKEN`（Windows 用户级环境变量也算），DSH 会将该引用视为只读，卡片会禁用令牌输入并说明原因。此时面板已直接使用该环境变量，**无需保存**；要改由设置页管理，请先移除环境变量（Windows：系统属性 → 环境变量，或 PowerShell `[Environment]::SetEnvironmentVariable('JIRA_API_TOKEN', $null, 'User')`）后重启 DSH。
+
 #### 连接测试
 
 卡片底部有连接状态灯与 **测试连接** 按钮：
@@ -126,6 +128,20 @@ dsh plugin --profile web remove dsh-jira-tasks
 | 未配置 JIRA 令牌（设置 → 插件 → JIRA，或环境变量 JIRA_API_TOKEN） | 令牌未写入，见上文「配置 1」 |
 | 401 … | 令牌无效或认证方式不对；先 `curl -H "Authorization: Bearer <token>" <base>/rest/api/2/myself` 验证 |
 | 无法解析 JIRA 响应：… | 网络 / 代理问题，curl 无输出 |
+</details>
+
+<details>
+<summary>保存令牌报 “is supplied read-only by the launching environment”</summary>
+
+`JIRA_API_TOKEN`（或 `JIRA_TOKEN`）已由启动 DSH 的环境提供，DSH 判定该引用只读：写入会被环境变量遮蔽，因此拒绝保存。此时面板已经直接使用该环境变量，能正常查询，**无需在设置页保存**。
+
+如需改由设置页管理令牌，先移除环境变量再重启 DSH：
+
+- Windows（PowerShell）：`[Environment]::SetEnvironmentVariable('JIRA_API_TOKEN', $null, 'User')`，然后重开终端
+- Windows（图形界面）：系统属性 → 高级 → 环境变量，删除对应用户变量
+- macOS / Linux：从 `~/.zshrc` / `~/.bashrc` 等启动脚本中移除后重开终端
+
+v1.0.7 起卡片会检测只读令牌并直接禁用输入框、在卡片内给出上述提示，不再等到保存才报英文错误。
 </details>
 
 <details>
