@@ -7,7 +7,10 @@
   "settingsNamespace": "jira-tasks",
   "envVars": {
     "JIRA_BASE_URL": "JIRA 地址（回退；设置页优先，备选：JIRA_URL）",
-    "JIRA_API_TOKEN": "访问令牌 / PAT（回退；设置页优先，备选：JIRA_TOKEN）"
+    "JIRA_API_TOKEN": "访问令牌 / PAT（回退；设置页写入的凭据引用 JIRA_TASKS_TOKEN 优先，备选：JIRA_TOKEN）"
+  },
+  "credentialRefs": {
+    "JIRA_TASKS_TOKEN": "设置页保存的访问令牌（插件自有引用；优先于环境变量，可在卡片中清除）"
   },
   "credentialFile": "$DSH_HOME/.credentials.yaml",
   "storageKey": "dsh.jiraTasks.config.v1",
@@ -24,7 +27,7 @@
     },
     "profileBundle": {
       "packageName": "dsh-jira-tasks",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "profileDir": "$DSH_HOME/profiles/web",
       "route": "POST /jira/api/search",
       "testRoute": "POST /jira/api/test",

@@ -70,11 +70,17 @@ dsh plugin --profile web add github:liu3734/jira-tasks-dsh-plugin
 打开 **设置 → 插件 → 插件配置 → JIRA**，填写：
 
 - **JIRA 地址**：如 `http://jira.example.com/`（存入用户设置文档，可在界面回读）
-- **访问令牌 / PAT**：写入凭据存储（`$DSH_HOME/.credentials.yaml`），前端只显示"已配置"，不回传令牌本身
+- **访问令牌 / PAT**：写入凭据存储（`$DSH_HOME/.credentials.yaml`，引用名是插件自有的 `JIRA_TASKS_TOKEN`），前端只显示"已配置"，不回传令牌本身
 
 留空并保存会保持已有令牌不变；地址留空并保存则清除设置项，回退到环境变量。认证自动识别：令牌含 `:` 用 Basic，否则用 Bearer（JIRA PAT）。
 
-> **令牌已由环境变量提供时，设置页无法改写它**：若启动 DSH 的环境里已设置 `JIRA_API_TOKEN`（Windows 用户级环境变量也算），DSH 会将该引用视为只读，卡片会禁用令牌输入并说明原因。此时面板已直接使用该环境变量，**无需保存**；要改由设置页管理，请先移除环境变量（Windows：系统属性 → 环境变量，或 PowerShell `[Environment]::SetEnvironmentVariable('JIRA_API_TOKEN', $null, 'User')`）后重启 DSH。
+> **设置页令牌优先于环境变量**：启动 DSH 的环境里已有 `JIRA_API_TOKEN`（Windows 用户级环境变量也算）时，卡片照常可以输入并保存——保存的是插件自有引用 `JIRA_TASKS_TOKEN`，DSH 不会拒绝（它只拒绝写入会被环境遮蔽的同名引用），Host 解析时也把它排在环境变量之前：
+>
+> ```
+> JIRA_TASKS_TOKEN（设置页） > JIRA_API_TOKEN > JIRA_TOKEN
+> ```
+>
+> 想改回用环境变量，点卡片里的「清除设置页令牌」即可。
 
 #### 连接测试
 
@@ -92,7 +98,7 @@ JIRA_API_TOKEN: "<PAT 或 user:token>"
 ```
 
 - 地址别名：`JIRA_BASE_URL` / `JIRA_URL`
-- 令牌别名：`JIRA_API_TOKEN` / `JIRA_TOKEN`
+- 令牌解析顺序：`JIRA_TASKS_TOKEN`（设置页写入）→ `JIRA_API_TOKEN` → `JIRA_TOKEN`，前者优先
 
 ### 2. 项目 Key 与 JQL（按工作区）
 
@@ -131,17 +137,17 @@ dsh plugin --profile web remove dsh-jira-tasks
 </details>
 
 <details>
-<summary>保存令牌报 “is supplied read-only by the launching environment”</summary>
+<summary>环境变量里的令牌，能不能在设置页覆盖？</summary>
 
-`JIRA_API_TOKEN`（或 `JIRA_TOKEN`）已由启动 DSH 的环境提供，DSH 判定该引用只读：写入会被环境变量遮蔽，因此拒绝保存。此时面板已经直接使用该环境变量，能正常查询，**无需在设置页保存**。
+**能。** 卡片把令牌保存到插件自有引用 `JIRA_TASKS_TOKEN`，而不是直接写环境变量用的 `JIRA_API_TOKEN`。DSH 只拒绝写入「会被启动环境遮蔽的同名引用」，插件自有引用不受影响，所以哪怕 shell / 系统里已导出 `JIRA_API_TOKEN`，设置页也能正常输入并保存，并且 Host 解析时优先用它：
 
-如需改由设置页管理令牌，先移除环境变量再重启 DSH：
+```
+JIRA_TASKS_TOKEN（设置页） > JIRA_API_TOKEN > JIRA_TOKEN
+```
 
-- Windows（PowerShell）：`[Environment]::SetEnvironmentVariable('JIRA_API_TOKEN', $null, 'User')`，然后重开终端
-- Windows（图形界面）：系统属性 → 高级 → 环境变量，删除对应用户变量
-- macOS / Linux：从 `~/.zshrc` / `~/.bashrc` 等启动脚本中移除后重开终端
-
-v1.0.7 起卡片会检测只读令牌并直接禁用输入框、在卡片内给出上述提示，不再等到保存才报英文错误。
+- 卡片会显示当前生效来源：已保存设置页令牌时提示「优先于环境变量 JIRA_API_TOKEN」；未保存时提示「当前使用环境变量 JIRA_API_TOKEN，填写并保存即可覆盖」
+- 保存后自动重测连接；点「清除设置页令牌（回退到环境变量）」可删除覆盖值
+- 唯一仍会报 `is supplied read-only by the launching environment` 的情况：有人把 `JIRA_TASKS_TOKEN` 本身也导出到了启动环境——那种情况下该引用确实只读，需先移除它（Windows：系统属性 → 环境变量，或 PowerShell `[Environment]::SetEnvironmentVariable('JIRA_TASKS_TOKEN', $null, 'User')`）并重启 DSH
 </details>
 
 <details>
@@ -161,15 +167,15 @@ v1.0.7 起卡片会检测只读令牌并直接禁用输入框、在卡片内给�
 │ conversation.composer.dock（活跃会话）  │   │ webServer 路由 /jira/api/search     │
 │ conversation.input.dock（新会话）       │   │ ↓                                   │
 │   面板 hero 布局（flex order:99）       │   │ settings.get("jira-tasks").baseUrl   │
-│   ↓ 挂载 / 刷新时 fetch POST            │   │ credentials.resolve(JIRA_API_TOKEN) │
+│   ↓ 挂载 / 刷新时 fetch POST            │   │ credentials.resolve(TOKEN_REFS)     │
 │ 渲染：任务列表 / 错误 / 未配置          │   │ subprocess.spawn(curl …)            │
 │ localStorage 按工作区存取项目 Key/JQL   │   │ ↓ stdout JSON                       │
 │ settings.plugin.item（设置页卡片）      │   │ 解析 issues → 返回 {ok,issues}      │
 └────────────────────────────────────────┘   └────────────────────────────────────┘
 ```
 
-- **Host**：注册 `settings` 命名空间 `jira-tasks`（`baseUrl`，可读）与 `webServer` 路由 `POST /jira/api/search`；地址优先读设置文档，令牌经 `credentials` 服务解析（设置页写入 / 环境变量 / `$DSH_HOME/.credentials.yaml`，热加载）；查询用 `subprocess` 直接 `spawn curl`，认证头经 stdin（`--config -`）传入，令牌不进入命令行参数。
-- **Client**：`window.__ModuleLoader__.load({ id, factory })` 标准 web bundle；注册 `conversation.composer.dock`（活跃会话，注册 `order: 5`）与 `conversation.input.dock`（新会话，注册 `order: 10`）。新会话面板走 hero 布局：面板元素自身 `flex order: 99` 排在输入框之后下方，并以 `--dsh-composer-side-clearance` / `--dsh-composer-card-max-width` 与输入卡等宽。另注册 `settings.plugin.item`（`key: "jira-tasks"`）作为设置页卡片：地址经 `settingsScope` 写入命名空间，令牌经 `remote.credentials` 写入凭据存储。
+- **Host**：注册 `settings` 命名空间 `jira-tasks`（`baseUrl`，可读）与 `webServer` 路由 `POST /jira/api/search`；地址优先读设置文档，令牌经 `credentials` 服务按 `JIRA_TASKS_TOKEN`（设置页写入）→ `JIRA_API_TOKEN` → `JIRA_TOKEN` 的顺序解析（`$DSH_HOME/.credentials.yaml` / 环境变量，热加载），因此设置页保存的令牌能覆盖环境变量；查询用 `subprocess` 直接 `spawn curl`，认证头经 stdin（`--config -`）传入，令牌不进入命令行参数。
+- **Client**：`window.__ModuleLoader__.load({ id, factory })` 标准 web bundle；注册 `conversation.composer.dock`（活跃会话，注册 `order: 5`）与 `conversation.input.dock`（新会话，注册 `order: 10`）。新会话面板走 hero 布局：面板元素自身 `flex order: 99` 排在输入框之后下方，并以 `--dsh-composer-side-clearance` / `--dsh-composer-card-max-width` 与输入卡等宽。另注册 `settings.plugin.item`（`key: "jira-tasks"`）作为设置页卡片：地址经 `settingsScope` 写入命名空间，令牌经 `remote.credentials` 写入 `JIRA_TASKS_TOKEN`。
 - **为什么不用 `shell` 服务**：`shell` 会套 `sandbox-exec`，部分 macOS 上不可用（`sandbox_apply: Operation not permitted`）；`subprocess` 是原始进程缝，无此问题。
 - **新会话显示**：DSH 壳在 hero（空白会话）阶段不渲染 `composer.dock`，故额外注册 `input.dock`，并用「会话是否已有消息」去重（新版 DSH 依据 `SessionSnapshot.blank`），避免双份面板。
 

@@ -59,11 +59,17 @@ In a DSH session, use the Cordis tools: `cordis_define` (`kind: new`, `idPrefix:
 Open **Settings → Plugins → Plugin configuration → JIRA** and fill in:
 
 - **JIRA base URL**: e.g. `http://jira.example.com/` (stored in the user settings document and read back by the form)
-- **Access token / PAT**: written to the credential store (`$DSH_HOME/.credentials.yaml`); the browser only ever sees "configured", never the token itself
+- **Access token / PAT**: written to the credential store (`$DSH_HOME/.credentials.yaml`) under the plugin-owned ref `JIRA_TASKS_TOKEN`; the browser only ever sees "configured", never the token itself
 
 Leaving the token blank on save keeps the existing one; clearing the address on save removes the override and falls back to the environment. Auth is auto-detected: tokens containing `:` use Basic, otherwise Bearer (JIRA PAT).
 
-> **A token supplied by the environment cannot be overwritten from this card.** If the environment that launched DSH already defines `JIRA_API_TOKEN` (a Windows *user-level* variable counts), DSH treats that reference as read-only: the card disables the token field and explains why. The panel already uses that variable, so **no save is needed**; to manage the token from settings instead, remove the variable first (Windows: System Properties → Environment Variables, or PowerShell `[Environment]::SetEnvironmentVariable('JIRA_API_TOKEN', $null, 'User')`) and restart DSH.
+> **The settings-page token takes precedence over the environment.** When the environment that launched DSH already defines `JIRA_API_TOKEN` (a Windows *user-level* variable counts), the card is still editable: it stores the token in its own ref `JIRA_TASKS_TOKEN`, which DSH accepts (it only refuses to write a ref the launching environment shadows), and the Host resolves tokens in this order:
+>
+> ```
+> JIRA_TASKS_TOKEN (settings card) > JIRA_API_TOKEN > JIRA_TOKEN
+> ```
+>
+> Click **Clear settings token** in the card to fall back to the environment variable again.
 
 #### Connection test
 
@@ -81,7 +87,7 @@ JIRA_API_TOKEN: "<PAT or user:token>"
 ```
 
 - Base URL aliases: `JIRA_BASE_URL` / `JIRA_URL`
-- Token aliases: `JIRA_API_TOKEN` / `JIRA_TOKEN`
+- Token resolution order: `JIRA_TASKS_TOKEN` (written by the settings card) → `JIRA_API_TOKEN` → `JIRA_TOKEN`; the first match wins
 
 ### 2. Project key and JQL (per workspace)
 
@@ -117,17 +123,17 @@ dsh plugin --profile web remove dsh-jira-tasks
 </details>
 
 <details>
-<summary>Saving the token fails with "is supplied read-only by the launching environment"</summary>
+<summary>Can the settings card override the token from the environment?</summary>
 
-`JIRA_API_TOKEN` (or `JIRA_TOKEN`) is supplied by the environment that launched DSH, and DSH treats that reference as read-only: a write would be shadowed by the variable, so it is refused. The panel already uses that variable and queries fine, so **there is nothing to save**.
+**Yes.** The card stores the token under the plugin-owned ref `JIRA_TASKS_TOKEN` instead of writing the environment's `JIRA_API_TOKEN`. DSH only refuses to write a ref the launching environment *shadows*, so its own ref is always writable: even with `JIRA_API_TOKEN` exported by the shell or the OS, the field accepts input, the save succeeds, and the Host prefers it:
 
-To manage the token from the settings card instead, remove the variable and restart DSH:
+```
+JIRA_TASKS_TOKEN (settings card) > JIRA_API_TOKEN > JIRA_TOKEN
+```
 
-- Windows (PowerShell): `[Environment]::SetEnvironmentVariable('JIRA_API_TOKEN', $null, 'User')`, then reopen the terminal
-- Windows (GUI): System Properties → Advanced → Environment Variables, delete the user variable
-- macOS / Linux: remove the export from `~/.zshrc` / `~/.bashrc` (or equivalent) and reopen the terminal
-
-Since v1.0.7 the card detects a read-only token, disables the field, and shows this guidance inline instead of failing on save.
+- The card names the effective source: with a saved token it says "overrides environment variable JIRA_API_TOKEN"; without one it says "currently using environment variable JIRA_API_TOKEN — fill in and save to override"
+- Saving re-probes the connection; **Clear settings token (fall back to environment)** removes the override
+- The one remaining case that reports `is supplied read-only by the launching environment` is someone exporting `JIRA_TASKS_TOKEN` itself — that ref really is read-only then; remove it (Windows: System Properties → Environment Variables, or PowerShell `[Environment]::SetEnvironmentVariable('JIRA_TASKS_TOKEN', $null, 'User')`) and restart DSH
 </details>
 
 <details>
@@ -147,14 +153,14 @@ Since v1.0.7 the card detects a read-only token, disables the field, and shows t
 │ conversation.composer.dock (active)        │      │ webServer route /jira/api/search │
 │ conversation.input.dock (new, order:99)    │      │   ↓                            │
 │   ↓ on mount/refresh fetch POST            │      │ settings.get("jira-tasks")      │
-│ render: list / error / unconfigured        │      │ credentials.resolve(JIRA_*)     │
+│ render: list / error / unconfigured        │      │ credentials.resolve(TOKEN_REFS) │
 │ localStorage per-workspace key/JQL         │      │ subprocess.spawn(curl …)        │
 │ settings.plugin.item (Settings card)       │      │   ↓ stdout JSON                 │
 └────────────────────────────────────────────┘      │ parse issues → {ok,issues}      │
                                                     └────────────────────────────────┘
 ```
 
-- **Host**: registers the `jira-tasks` settings namespace (`baseUrl`, readable) and a `webServer` route `POST /jira/api/search`; the address comes from the settings document, the token from the `credentials` service (Settings card / env / `$DSH_HOME/.credentials.yaml`, hot-reloaded); queries run through `subprocess` spawning `curl` directly, with the auth header passed via stdin (`--config -`) so the token never appears in argv.
+- **Host**: registers the `jira-tasks` settings namespace (`baseUrl`, readable) and a `webServer` route `POST /jira/api/search`; the address comes from the settings document, the token from the `credentials` service resolved in the order `JIRA_TASKS_TOKEN` (written by the Settings card) → `JIRA_API_TOKEN` → `JIRA_TOKEN` (`$DSH_HOME/.credentials.yaml` / environment, hot-reloaded), so a saved card token overrides the environment; queries run through `subprocess` spawning `curl` directly, with the auth header passed via stdin (`--config -`) so the token never appears in argv.
 - **Client**: a standard `window.__ModuleLoader__.load({ id, factory })` web bundle; registers `conversation.composer.dock` (active sessions) and `conversation.input.dock` (new sessions, flex `order: 99` below the input, aligned width), plus `settings.plugin.item` (`key: "jira-tasks"`) for the Settings card — the address is written through `settingsScope` and the token through `remote.credentials`.
 - **Why not the `shell` service**: `shell` wraps commands with `sandbox-exec`, which is broken on some macOS versions (`sandbox_apply: Operation not permitted`); `subprocess` is the raw process seam without this issue.
 - **New-session display**: the DSH shell does not render `composer.dock` during the hero (blank session) phase, so the plugin also registers `input.dock` and de-duplicates by "session has messages".

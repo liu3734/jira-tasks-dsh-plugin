@@ -8,6 +8,10 @@ return {
     const credentials = ctx.credentials;
     const workspaceRoot = ctx.sandboxPolicy.workspaceRoot;
 
+    // 令牌引用优先级：插件自有引用（设置页写入，可覆盖环境变量）先行，
+    // 其后才是环境变量回退。
+    const TOKEN_REFS = ['JIRA_TASKS_TOKEN', 'JIRA_API_TOKEN', 'JIRA_TOKEN'];
+
     async function resolveFirst(names) {
       for (const name of names) {
         try {
@@ -75,8 +79,8 @@ return {
       try {
         const baseUrl = await resolveFirst(['JIRA_BASE_URL', 'JIRA_URL']);
         if (!baseUrl) return { ok: false, error: '未配置环境变量 JIRA_BASE_URL（或 JIRA_URL）' };
-        const token = await resolveFirst(['JIRA_API_TOKEN', 'JIRA_TOKEN']);
-        if (!token) return { ok: false, error: '未配置环境变量 JIRA_API_TOKEN（或 JIRA_TOKEN）' };
+        const token = await resolveFirst(TOKEN_REFS);
+        if (!token) return { ok: false, error: '未配置 JIRA 令牌（JIRA_TASKS_TOKEN，或环境变量 JIRA_API_TOKEN / JIRA_TOKEN）' };
 
         const jql = buildJql(args && args.jql ? String(args.jql) : '', projectKey);
         const raw = await queryJira(baseUrl, token, jql);
