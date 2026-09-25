@@ -36,15 +36,24 @@ jobs:
       - run: npm install
       - name: Publish to npmjs.org
         run: |
-          npm publish 2>/tmp/npmjs-publish.log || {
-            # 幂等：版本已发布（手动重跑时）视为成功
-            grep -qE "You cannot publish over the previously published versions|EPUBLISHCONFLICT" /tmp/npmjs-publish.log && {
-              echo "npmjs.org: version already exists, skip publish"
+          # 幂等：不要靠错误文案判断成败。同一个版本可能因为“本地已发过一次”、
+          # 重跑、或并发 publish 而返回 403 "cannot publish over previously
+          # published versions" / 409 "Cannot publish over previously staged
+          # version"（v1.1.0 发版时就撞上最后这种，导致后面 GitHub Packages 那步
+          # 被跳过）。这里以注册表里版本是否可见为唯一判据，并给它一点同步时间。
+          npm publish 2>/tmp/npmjs-publish.log || true
+          VERSION=$(node -p "require('./package.json').version")
+          for attempt in 1 2 3 4 5 6; do
+            if npm view "dsh-jira-tasks@${VERSION}" version >/dev/null 2>&1; then
+              echo "npmjs.org: dsh-jira-tasks@${VERSION} is published"
               exit 0
-            }
-            cat /tmp/npmjs-publish.log
-            exit 1
-          }
+            fi
+            echo "npmjs.org: ${VERSION} not visible yet (attempt ${attempt}/6), retrying"
+            sleep 10
+          done
+          echo "npmjs.org: dsh-jira-tasks@${VERSION} never became visible"
+          cat /tmp/npmjs-publish.log
+          exit 1
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Publish to GitHub Packages
