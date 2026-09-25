@@ -1,2 +1,8 @@
 .DS_Store
 dsh-usage/
+node_modules/
+
+# 本地构建 / 审计产物，不属于发布的包内容（见 package.json 的 files 白名单）
+.npm-cache/
+.audit/
+pnpm-lock.yaml

@@ -1,12 +1,16 @@
 {
   "pluginId": "jira-1",
   "name": "JIRA 开启任务面板",
-  "purpose": "按工作区配置项目 Key，在新会话输入框下方展示指派给当前用户的“开启/重新开启”任务；JIRA 地址与令牌在 设置 → 插件 → JIRA 中配置（环境变量 / .credentials.yaml 作为回退）；未配置的工作区显示未配置状态。",
-  "type": ["dsh-dynamic-cordis-plugin", "dsh-profile-bundle"],
+  "purpose": "按工作区配置项目 Key，在新会话输入框下方展示指派给当前用户的“开启/重新开启”任务；JIRA 地址与令牌在 设置 → 插件 → JIRA 中配置（环境变量 / .credentials.yaml 作为回退）；未配置的工作区显示未配置状态。适配 DSH 0.1.7（0.1.7-rc.2 实测）。",
+  "type": [
+    "dsh-dynamic-cordis-plugin",
+    "dsh-profile-bundle"
+  ],
+  "dshVersion": "0.1.7",
   "defaultJql": "project = \"{projectKey}\" AND status in (\"开启\", \"重新开启\") AND assignee = currentUser() ORDER BY updated DESC",
   "settingsNamespace": "jira-tasks",
   "envVars": {
-    "JIRA_BASE_URL": "JIRA 地址（回退；设置页优先，备选：JIRA_URL）",
+    "JIRA_BASE_URL": "JIRA 地址（回退；条目 Config.baseUrl 优先，备选：JIRA_URL）",
     "JIRA_API_TOKEN": "访问令牌 / PAT（回退；设置页写入的凭据引用 JIRA_TASKS_TOKEN 优先，备选：JIRA_TOKEN）"
   },
   "credentialRefs": {
@@ -15,9 +19,23 @@
   "credentialFile": "$DSH_HOME/.credentials.yaml",
   "storageKey": "dsh.jiraTasks.config.v1",
   "hostHandler": "jira/list",
-  "slots": ["conversation.composer.dock", "conversation.input.dock"],
-  "hostInjects": ["subprocess", "credentials", "sandboxPolicy"],
-  "clientInjects": ["slots"],
+  "slots": [
+    "conversation.input.dock",
+    "plugins.item"
+  ],
+  "hostInjects": [
+    "subprocess",
+    "credentials",
+    "sandboxPolicy",
+    "webServer"
+  ],
+  "clientInjects": [
+    "slots",
+    "configForms",
+    "remote",
+    "remote.credentials"
+  ],
+  "profileRequirement": "宿主 profile 的 dsh.profile.bundles 必须包含 \"dsh-jira-tasks\"，否则本包的 cordis.patch.yml 层不会生效（启动日志：patch: entry \"jira-tasks\" not found）。",
   "registration": {
     "dynamic": {
       "files": {
@@ -27,8 +45,9 @@
     },
     "profileBundle": {
       "packageName": "dsh-jira-tasks",
-      "version": "1.0.8",
+      "version": "1.1.0",
       "profileDir": "$DSH_HOME/profiles/web",
+      "entryId": "jira-tasks",
       "route": "POST /jira/api/search",
       "testRoute": "POST /jira/api/test",
       "files": {

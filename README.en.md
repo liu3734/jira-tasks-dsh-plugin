@@ -6,6 +6,8 @@
 
 Shows the current JIRA project's **open / reopened** issues **assigned to the current user** below the DSH composer input. The JIRA base URL and token are configured in **Settings → Plugins → JIRA** (`JIRA_BASE_URL` / `JIRA_API_TOKEN` act as fallback); the project key and JQL are **configured per workspace** and persisted.
 
+> **DSH version targeted: 0.1.7 (verified on `0.1.7-rc.2`).** The client slots `conversation.input.dock` / `plugins.item`, the settings service `ctx.configForms` (namespace = profile entry id `jira-tasks`), and the `ctx.effect` / `configForms.whileServed` disposal contracts all follow the 0.1.7 interfaces; the 0.1.6-era `settingsScope` / `settings.register` / `settings.plugin.item` APIs are gone and no longer used.
+
 ## Features
 
 - 📋 Panel shown below the composer in both new and active sessions (aligned with the input width in new sessions)
@@ -33,6 +35,10 @@ dsh plugin --profile web add github:liu3734/jira-tasks-dsh-plugin
 
 **Restart DSH** to activate.
 
+> **Nothing shows up? Check `dsh.profile.bundles` first.** DSH mounts this package as a profile layer only when `"dsh-jira-tasks"` is listed in `dsh.profile.bundles` of `~/.dsh/profiles/web/package.json`; being in `dependencies` alone is not enough — the startup log then prints `patch: entry "jira-tasks" not found` and the plugin silently never loads. `dsh plugin --profile web add` normally appends that row, but it will not re-append when the package is already a dependency; add `"dsh-jira-tasks"` to `dsh.profile.bundles` by hand.
+
+> Using GitHub Packages instead: configure `@liu3734:registry=https://npm.pkg.github.com/` plus a read token in the profile's `.npmrc`, then run `dsh plugin --profile web add @liu3734/dsh-jira-tasks`.
+
 <details>
 <summary>Manual install (without npm)</summary>
 
@@ -58,10 +64,10 @@ In a DSH session, use the Cordis tools: `cordis_define` (`kind: new`, `idPrefix:
 
 Open **Settings → Plugins → Plugin configuration → JIRA** and fill in:
 
-- **JIRA base URL**: e.g. `http://jira.example.com/` (stored in the user settings document and read back by the form)
+- **JIRA base URL**: e.g. `http://jira.example.com/` (written to this plugin entry's `Config.baseUrl` — the `jira-tasks` row in the profile's `cordis.patch.yml` — and read back by the form; a host-refused write now surfaces as an error instead of failing silently)
 - **Access token / PAT**: written to the credential store (`$DSH_HOME/.credentials.yaml`) under the plugin-owned ref `JIRA_TASKS_TOKEN`; the browser only ever sees "configured", never the token itself
 
-Leaving the token blank on save keeps the existing one; clearing the address on save removes the override and falls back to the environment. Auth is auto-detected: tokens containing `:` use Basic, otherwise Bearer (JIRA PAT).
+Leaving the token blank on save keeps the existing one; clearing the address on save removes the override and falls back to the credential store / environment. Auth is auto-detected: tokens containing `:` use Basic, otherwise Bearer (JIRA PAT).
 
 > **The settings-page token takes precedence over the environment.** When the environment that launched DSH already defines `JIRA_API_TOKEN` (a Windows *user-level* variable counts), the card is still editable: it stores the token in its own ref `JIRA_TASKS_TOKEN`, which DSH accepts (it only refuses to write a ref the launching environment shadows), and the Host resolves tokens in this order:
 >
@@ -79,7 +85,7 @@ The card's footer carries a status light and a **Test connection** button:
 - **Green** = address and token work (the current user is shown); **red** = unusable (JIRA's reason, e.g. 401, is shown); **grey** = address or token not configured
 - **Test connection** probes what is currently in the fields, saved or not, so you can check before saving
 
-Environment variables / credentials still work as a **fallback** (used when the settings card is empty), hot-reloaded without a restart:
+Environment variables / credentials still work as a **fallback** (used when the settings card leaves `baseUrl` empty), hot-reloaded without a restart. Address precedence is `Config.baseUrl` > `JIRA_BASE_URL` > `JIRA_URL`, and `JIRA_BASE_URL` may live in the launching environment or in `.credentials.yaml` — note that a stale record (e.g. an old domain left in the credential file) becomes effective again as soon as the settings page clears the address:
 
 ```yaml
 JIRA_BASE_URL: "http://jira.example.com/"
@@ -140,7 +146,9 @@ JIRA_TASKS_TOKEN (settings card) > JIRA_API_TOKEN > JIRA_TOKEN
 <summary>Panel does not appear</summary>
 
 - Make sure it is installed and DSH was **restarted**; in new sessions the panel sits below the input
-- Check the DSH startup log for profile plugin load errors
+- Check that `dsh.profile.bundles` in `~/.dsh/profiles/web/package.json` lists `"dsh-jira-tasks"` (the most common cause of a silent no-show — see the Install note)
+- Check the DSH startup log: `patch: entry "jira-tasks" not found` means the profile layer was never composed; `webserver: duplicate exact route` means a route was registered twice (the plugin releases its routes through `ctx.effect`, so this points at a second copy)
+- A browser console error `client-modules: could not load "dsh-jira-tasks"` means `/plugins/dsh-jira-tasks/client.js` was not served — confirm `exports["./client"]` resolves to the built `lib/client.js`
 </details>
 
 ## Architecture & Implementation Details
@@ -149,21 +157,21 @@ JIRA_TASKS_TOKEN (settings card) > JIRA_API_TOKEN > JIRA_TOKEN
 <summary>Expand</summary>
 
 ```
-┌─────────── Browser (Client) ───────────┐      ┌──────────── Host ──────────────┐
-│ conversation.composer.dock (active)        │      │ webServer route /jira/api/search │
-│ conversation.input.dock (new, order:99)    │      │   ↓                            │
-│   ↓ on mount/refresh fetch POST            │      │ settings.get("jira-tasks")      │
-│ render: list / error / unconfigured        │      │ credentials.resolve(TOKEN_REFS) │
-│ localStorage per-workspace key/JQL         │      │ subprocess.spawn(curl …)        │
-│ settings.plugin.item (Settings card)       │      │   ↓ stdout JSON                 │
-└────────────────────────────────────────────┘      │ parse issues → {ok,issues}      │
+┌────────────── Browser (Client) ──────────────┐      ┌─────────────── Host ───────────────┐
+│ conversation.input.dock (both states)        │      │ webServer route /jira/api/search   │
+│ CSS order:99 -> below the input, full width  │      │ entry Config.baseUrl (volatile)    │
+│ on mount/refresh: fetch POST                 │      │ credentials.resolve(TOKEN_REFS)    │
+│ render: list / error / unconfigured          │      │ subprocess.spawn(curl ...)         │
+│ localStorage: per-workspace key/JQL          │      │ parse stdout JSON                  │
+│ plugins.item (Settings card)                 │      │ return {ok, issues}                │
+└──────────────────────────────────────────────┘      └────────────────────────────────────┘
                                                     └────────────────────────────────┘
 ```
 
-- **Host**: registers the `jira-tasks` settings namespace (`baseUrl`, readable) and a `webServer` route `POST /jira/api/search`; the address comes from the settings document, the token from the `credentials` service resolved in the order `JIRA_TASKS_TOKEN` (written by the Settings card) → `JIRA_API_TOKEN` → `JIRA_TOKEN` (`$DSH_HOME/.credentials.yaml` / environment, hot-reloaded), so a saved card token overrides the environment; queries run through `subprocess` spawning `curl` directly, with the auth header passed via stdin (`--config -`) so the token never appears in argv.
-- **Client**: a standard `window.__ModuleLoader__.load({ id, factory })` web bundle; registers `conversation.composer.dock` (active sessions) and `conversation.input.dock` (new sessions, flex `order: 99` below the input, aligned width), plus `settings.plugin.item` (`key: "jira-tasks"`) for the Settings card — the address is written through `settingsScope` and the token through `remote.credentials`.
+- **Host**: declares the entry's own `Config` (`baseUrl`, `volatile` — since DSH 0.1.5 a settings page is built from it; `settings.configure({ auto: false }, ctx.fiber)` turns the auto-generated page off and hands its disposer back to `ctx.effect`) plus `webServer` routes `POST /jira/api/search` and `POST /jira/api/test`, each wrapped in its own `ctx.effect` (a reload otherwise hits "duplicate route" and fails activation; non-POST requests get 405); the token comes from the `credentials` service resolved in the order `JIRA_TASKS_TOKEN` (written by the Settings card) → `JIRA_API_TOKEN` → `JIRA_TOKEN` (`$DSH_HOME/.credentials.yaml` / environment, hot-reloaded), so a saved card token overrides the environment; queries run through `subprocess` spawning `curl` directly, with the auth header passed via stdin (`--config -`) so the token never appears in argv.
+- **Client**: a standard `window.__ModuleLoader__.load({ id, factory })` web bundle requiring only `"react"`; registers **only `conversation.input.dock`** (`order: 10`) — that seat renders in both new and active sessions and is a full-width row of `composerStack` (`flex-direction: column`), where the panel's own CSS `order: 99` places it below the input card at the card's width. `conversation.composer.dock` is deliberately NOT used: in 0.1.7 it renders into InputBar's `.dock` **row**, side by side with the context meter, so a full-width panel there gets its right-hand content covered by the meter. Also registers the plugin configuration card on `plugins.item` (`id: "jira-tasks"`) — the address form comes from `ctx.configForms.get("jira-tasks")` and the token is written through `remote.credentials` to `JIRA_TASKS_TOKEN`; `configForms.whileServed` keeps it hidden when the host serves no such namespace. The card's `summary` view is rendered by a dispatcher that calls **no hooks**, while the form lives in a separate `JiraSettingsPage`, so flipping `view` on one mounted instance never changes its hook count.
 - **Why not the `shell` service**: `shell` wraps commands with `sandbox-exec`, which is broken on some macOS versions (`sandbox_apply: Operation not permitted`); `subprocess` is the raw process seam without this issue.
-- **New-session display**: the DSH shell does not render `composer.dock` during the hero (blank session) phase, so the plugin also registers `input.dock` and de-duplicates by "session has messages".
+- **One registration covers both states**: `conversation.input.dock` renders whenever a session and its input exist, so new and active sessions need no separate registrations (the older `composer.dock` + blank-session de-duplication was both unnecessary under 0.1.7 and the cause of the meter-row collision).
 
 **Differences from the dynamic version**
 

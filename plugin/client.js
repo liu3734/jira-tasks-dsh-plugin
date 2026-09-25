@@ -1,6 +1,6 @@
 // JIRA 开启任务面板 —— Client 半（DSH 动态 Cordis 插件）
 // 用法：作为 cordis_define 的 code.client 函数体传入。
-// 依赖：React / host / styles 闭包符号；槽位 conversation.composer.dock 与 conversation.input.dock
+// 依赖：React / host / styles 闭包符号；槽位 conversation.input.dock（输入框下方整宽面板）
 return {
   inject: ['slots'],
   apply(ctx) {
@@ -97,19 +97,7 @@ return {
 
     const h = React.createElement;
 
-    // 会话是否已有消息（用于区分“新会话/空白”与“活跃会话”）
-    // 新版 DSH：SessionSnapshot.blank 是“会话日志为空”的规范标记（任务队列/提交中也会翻转为 false）；
-    // 旧版 DSH：消息位于 chat.timeline / chat.legacy.nodes。
-    function hasMessages(session) {
-      if (!session) return false;
-      if (typeof session.blank === 'boolean') return !session.blank;
-      if (session.chat && session.chat.timeline && session.chat.timeline.length > 0) return true;
-      if (session.chat && session.chat.legacy && session.chat.legacy.nodes && session.chat.legacy.nodes.length > 0) return true;
-      return false;
-    }
-
     function JiraTasksDock(props) {
-      const blankOnly = !!(props && props.blankOnly === true);
 
       // 通过标准 props 取当前工作区（会话 → 所属工作区 → path/workspaceId 作为配置键）
       const useWorkspaces = props && typeof props.useWorkspaces === 'function' ? props.useWorkspaces : null;
@@ -165,9 +153,6 @@ return {
         return () => { cancelled = true; };
       }, [config, tick]);
 
-      // 新会话（input.dock 槽位）条目：仅当会话为空时渲染（所有 hook 之后返回，保证 hook 顺序一致）
-      if (blankOnly && hasMessages(props.session)) return null;
-
       const openEditor = () => {
         setDraftKey(config.projectKey);
         setDraftJql(config.jql || defaultJql(config.projectKey));
@@ -181,11 +166,9 @@ return {
       };
 
       // 新会话条目使用 hero 布局（位于输入框下方、与输入框等宽）
-      const heroLayout = blankOnly;
-
       // ---- 编辑表单 ----
       if (editing) {
-        return h('div', { className: heroLayout ? 'jt-root jt-hero' : 'jt-root' },
+        return h('div', { className: 'jt-root jt-hero' },
           h('div', { className: 'jt-panel' },
             h('div', { className: 'jt-header' },
               h('span', { className: 'jt-title' }, 'JIRA 任务设置')
@@ -272,7 +255,7 @@ return {
         );
       }
 
-      return h('div', { className: heroLayout ? 'jt-root jt-hero' : 'jt-root' },
+      return h('div', { className: 'jt-root jt-hero' },
         h('div', { className: 'jt-panel' },
           h('div', { className: 'jt-header' },
             h('button', {
@@ -302,19 +285,14 @@ return {
       );
     }
 
-    // 活跃会话：输入框下方（原位置）
-    ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
-      name: 'conversation.composer.dock',
-      id: 'jira-open-tasks',
-      order: 5
-    }, JiraTasksDock));
-
-    // 新会话（空白阶段）：注册到 input.dock，但通过 order:99 排到输入框之后（下方），
-    // 并用与输入卡一致的盒模型（side-clearance + card-max-width 居中）保证左右等宽
+    // 只注册 input.dock 一处：它在新会话与活跃会话下都会渲染，且属于 composerStack
+    // （flex-direction:column）的整宽纵向行。不要注册 conversation.composer.dock——
+    // 那一槽位在 0.1.7 里渲染进 InputBar 的 .dock 横向行，会和上下文占用环抢同一行，
+    // 面板右侧内容会被压住。面板自身用 CSS order:99 排到输入卡之后（下方）。
     ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
       name: 'conversation.input.dock',
-      id: 'jira-open-tasks-hero',
+      id: 'jira-open-tasks',
       order: 10
-    }, (props) => h(JiraTasksDock, Object.assign({}, props, { blankOnly: true }))));
+    }, JiraTasksDock));
   }
 };

@@ -6,6 +6,8 @@
 
 在 DSH 会话**输入框下方**展示当前 JIRA 项目**指派给当前用户**的「开启 / 重新开启」任务列表。JIRA 地址与令牌在**设置 → 插件 → JIRA** 中配置（`JIRA_BASE_URL` / `JIRA_API_TOKEN` 作为回退）；项目 Key 与 JQL **按工作区配置**并持久化。
 
+> **适配的 DSH 版本：0.1.7（`0.1.7-rc.2` 实测）。** 客户端槽位 `conversation.input.dock` / `plugins.item`、设置服务 `ctx.configForms`（命名空间 = profile 条目 id `jira-tasks`）、`ctx.effect` / `configForms.whileServed` 的注销契约均按 0.1.7 的接口实现；0.1.6 及更早版本的 `settingsScope` / `settings.register` / `settings.plugin.item` 已不再使用。
+
 ## 功能
 
 - 📋 新会话与活跃会话的输入框下方均展示任务面板（新会话时与输入框等宽）
@@ -42,6 +44,8 @@ dsh plugin --profile web add github:liu3734/jira-tasks-dsh-plugin
 
 **重启 DSH** 后生效。
 
+> **装完没反应？先查 `dsh.profile.bundles`。** DSH 只有当 `~/.dsh/profiles/web/package.json` 的 `dsh.profile.bundles` 里列了 `"dsh-jira-tasks"` 时才把本包当作 profile 层挂载；只出现在 `dependencies` 里不够——此时启动日志会打 `patch: entry "jira-tasks" not found`，插件静默不加载。`dsh plugin --profile web add` 一般会补上这一行，但该包已在 `dependencies` 中时重装不会重新补，手动往 `dsh.profile.bundles` 追加 `"dsh-jira-tasks"` 即可。
+
 > 若改用 GitHub Packages 源：先在 profile 的 `.npmrc` 配置 `@liu3734:registry=https://npm.pkg.github.com/` 及读取令牌，再执行 `dsh plugin --profile web add @liu3734/dsh-jira-tasks`。
 
 <details>
@@ -69,10 +73,10 @@ dsh plugin --profile web add github:liu3734/jira-tasks-dsh-plugin
 
 打开 **设置 → 插件 → 插件配置 → JIRA**，填写：
 
-- **JIRA 地址**：如 `http://jira.example.com/`（存入用户设置文档，可在界面回读）
+- **JIRA 地址**：如 `http://jira.example.com/`（写入本插件 profile 条目 `jira-tasks` 的 `Config.baseUrl`，即 profile 的 `cordis.patch.yml`，可在界面回读；保存被宿主拒绝时会直接报错，不会静默失败）
 - **访问令牌 / PAT**：写入凭据存储（`$DSH_HOME/.credentials.yaml`，引用名是插件自有的 `JIRA_TASKS_TOKEN`），前端只显示"已配置"，不回传令牌本身
 
-留空并保存会保持已有令牌不变；地址留空并保存则清除设置项，回退到环境变量。认证自动识别：令牌含 `:` 用 Basic，否则用 Bearer（JIRA PAT）。
+留空并保存会保持已有令牌不变；地址留空并保存则清除设置项，回退到凭据存储 / 环境变量。认证自动识别：令牌含 `:` 用 Basic，否则用 Bearer（JIRA PAT）。
 
 > **设置页令牌优先于环境变量**：启动 DSH 的环境里已有 `JIRA_API_TOKEN`（Windows 用户级环境变量也算）时，卡片照常可以输入并保存——保存的是插件自有引用 `JIRA_TASKS_TOKEN`，DSH 不会拒绝（它只拒绝写入会被环境遮蔽的同名引用），Host 解析时也把它排在环境变量之前：
 >
@@ -90,7 +94,7 @@ dsh plugin --profile web add github:liu3734/jira-tasks-dsh-plugin
 - **绿** = 地址与令牌可用（并显示当前登录用户）；**红** = 不可用（显示 JIRA 返回的原因，如 401 认证失败）；**灰** = 地址或令牌未配置
 - 点 **测试连接** 会用**当前输入框里的内容**（未保存也可）立即测试，方便改完再存
 
-以下环境变量 / 凭据仍作为**回退**（设置页未配置时生效，兼容旧部署），热加载无需重启：
+以下环境变量 / 凭据仍作为**回退**（设置页未配置 `baseUrl` 时生效，兼容旧部署），热加载无需重启。注意地址的优先级是 `Config.baseUrl` > `JIRA_BASE_URL` > `JIRA_URL`，而 `JIRA_BASE_URL` 既可以从启动环境读，也可以像下面这样存在 `.credentials.yaml` 里——旧域名的记录留在凭据文件里时，设置页一旦清空地址就会回退到它：
 
 ```yaml
 JIRA_BASE_URL: "http://jira.example.com/"
@@ -154,7 +158,9 @@ JIRA_TASKS_TOKEN（设置页） > JIRA_API_TOKEN > JIRA_TOKEN
 <summary>面板不显示</summary>
 
 - 确认已安装并**重启 DSH**；新会话面板位于输入框下方
-- 检查 DSH 启动日志中 profile 插件是否加载成功
+- 检查 `~/.dsh/profiles/web/package.json` 的 `dsh.profile.bundles` 是否包含 `"dsh-jira-tasks"`（这是最常见的漏装原因，见「安装」一节的提示）
+- 检查 DSH 启动日志：出现 `patch: entry "jira-tasks" not found` 即为 profile 层未挂载；出现 `webserver: duplicate exact route` 说明同一路由被注册了两次（插件自身已用 `ctx.effect` 释放旧路由，若仍有说明有第二份副本）
+- 浏览器控制台若报 `client-modules: could not load "dsh-jira-tasks"`，说明 `/plugins/dsh-jira-tasks/client.js` 没取到——确认 `package.json` 的 `exports["./client"]` 指向已构建的 `lib/client.js`
 </details>
 
 ## 架构与实现细节
@@ -164,20 +170,19 @@ JIRA_TASKS_TOKEN（设置页） > JIRA_API_TOKEN > JIRA_TOKEN
 
 ```
 ┌────────────────────────────────────────┐   ┌────────────────────────────────────┐
-│ conversation.composer.dock（活跃会话）  │   │ webServer 路由 /jira/api/search     │
-│ conversation.input.dock（新会话）       │   │ ↓                                   │
-│   面板 hero 布局（flex order:99）       │   │ settings.get("jira-tasks").baseUrl   │
+│ conversation.input.dock（两种会话）     │   │ webServer 路由 /jira/api/search     │
+│   CSS order:99 → 输入框下方、整宽       │   │ 条目 Config.baseUrl（volatile 引用） │
 │   ↓ 挂载 / 刷新时 fetch POST            │   │ credentials.resolve(TOKEN_REFS)     │
 │ 渲染：任务列表 / 错误 / 未配置          │   │ subprocess.spawn(curl …)            │
 │ localStorage 按工作区存取项目 Key/JQL   │   │ ↓ stdout JSON                       │
-│ settings.plugin.item（设置页卡片）      │   │ 解析 issues → 返回 {ok,issues}      │
+│ plugins.item（设置页卡片）              │   │ 解析 issues → 返回 {ok,issues}      │
 └────────────────────────────────────────┘   └────────────────────────────────────┘
 ```
 
-- **Host**：注册 `settings` 命名空间 `jira-tasks`（`baseUrl`，可读）与 `webServer` 路由 `POST /jira/api/search`；地址优先读设置文档，令牌经 `credentials` 服务按 `JIRA_TASKS_TOKEN`（设置页写入）→ `JIRA_API_TOKEN` → `JIRA_TOKEN` 的顺序解析（`$DSH_HOME/.credentials.yaml` / 环境变量，热加载），因此设置页保存的令牌能覆盖环境变量；查询用 `subprocess` 直接 `spawn curl`，认证头经 stdin（`--config -`）传入，令牌不进入命令行参数。
-- **Client**：`window.__ModuleLoader__.load({ id, factory })` 标准 web bundle；注册 `conversation.composer.dock`（活跃会话，注册 `order: 5`）与 `conversation.input.dock`（新会话，注册 `order: 10`）。新会话面板走 hero 布局：面板元素自身 `flex order: 99` 排在输入框之后下方，并以 `--dsh-composer-side-clearance` / `--dsh-composer-card-max-width` 与输入卡等宽。另注册 `settings.plugin.item`（`key: "jira-tasks"`）作为设置页卡片：地址经 `settingsScope` 写入命名空间，令牌经 `remote.credentials` 写入 `JIRA_TASKS_TOKEN`。
+- **Host**：声明条目自身的 `Config`（`baseUrl`，`volatile`，DSH 0.1.5 起设置页的表单直接来自它；`settings.configure({ auto: false }, ctx.fiber)` 关掉自动生成页，并把返回的注销函数交回 `ctx.effect`）与 `webServer` 路由 `POST /jira/api/search`、`POST /jira/api/test`（两条路由各自包在 `ctx.effect` 里，卸载/重载时先释放，否则重挂载会撞上「重复路由」直接抛错；非 POST 返回 405）；令牌经 `credentials` 服务按 `JIRA_TASKS_TOKEN`（设置页写入）→ `JIRA_API_TOKEN` → `JIRA_TOKEN` 的顺序解析（`$DSH_HOME/.credentials.yaml` / 环境变量，热加载），因此设置页保存的令牌能覆盖环境变量；查询用 `subprocess` 直接 `spawn curl`，认证头经 stdin（`--config -`）传入，令牌不进入命令行参数。
+- **Client**：`window.__ModuleLoader__.load({ id, factory })` 标准 web bundle，仅 `require("react")`；**只注册 `conversation.input.dock` 一处**（`order: 10`）。该槽位在新会话与活跃会话下都会渲染，属于 `composerStack`（`flex-direction: column`）的整宽纵向行；面板元素自身 `flex order: 99` 排到输入卡之后，即输入框下方，并以 `--dsh-composer-side-clearance` / `--dsh-composer-card-max-width` 与输入卡等宽。之所以不用 `conversation.composer.dock`：0.1.7 里那一槽位渲染进 InputBar 的 `.dock`**横向** flex 行，与上下文占用环并排，整宽面板会被占用环压住右侧内容。插件配置卡片注册到 `plugins.item`（`id: "jira-tasks"`），表单来自 `ctx.configForms.get("jira-tasks")`（地址）与 `remote.credentials`（令牌写入 `JIRA_TASKS_TOKEN`），并用 `configForms.whileServed` 保证宿主未提供该命名空间时不显示；`plugins.item` 的摘要位由一个**不调用任何 hook** 的分发组件负责，表单在独立的 `JiraSettingsPage` 里，避免同一实例在 `view` 切换时改变 hook 数量。
 - **为什么不用 `shell` 服务**：`shell` 会套 `sandbox-exec`，部分 macOS 上不可用（`sandbox_apply: Operation not permitted`）；`subprocess` 是原始进程缝，无此问题。
-- **新会话显示**：DSH 壳在 hero（空白会话）阶段不渲染 `composer.dock`，故额外注册 `input.dock`，并用「会话是否已有消息」去重（新版 DSH 依据 `SessionSnapshot.blank`），避免双份面板。
+- **一处注册覆盖两种会话**：`conversation.input.dock` 只要有 session + input 就会渲染，新会话与活跃会话无需分别注册（旧版曾用 `composer.dock` + 空白判定去重，0.1.7 下既不必要、又会与占用环抢同一行）。
 
 **与动态插件版的差异**
 
