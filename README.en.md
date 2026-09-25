@@ -4,15 +4,15 @@
 
 [中文](README.md) · **English**
 
-Shows the current JIRA project's **open / reopened** issues **assigned to the current user** below the DSH composer input. The JIRA base URL and token are configured in **Settings → Plugins → JIRA** (`JIRA_BASE_URL` / `JIRA_API_TOKEN` act as fallback); the project key and JQL are **configured per workspace** and persisted.
+Shows the current JIRA project's **open / reopened** issues **assigned to the current user** below the DSH composer input. The JIRA base URL and token are configured in **Settings → JIRA 配置** (the settings dialog's left navigation) (`JIRA_BASE_URL` / `JIRA_API_TOKEN` act as fallback); the project key and JQL are **configured per workspace** and persisted.
 
-> **DSH version targeted: 0.1.7 (verified on `0.1.7-rc.2`).** The client slots `conversation.input.dock` / `plugins.item`, the settings service `ctx.configForms` (namespace = profile entry id `jira-tasks`), and the `ctx.effect` / `configForms.whileServed` disposal contracts all follow the 0.1.7 interfaces; the 0.1.6-era `settingsScope` / `settings.register` / `settings.plugin.item` APIs are gone and no longer used.
+> **DSH version targeted: 0.1.7 (verified on `0.1.7-rc.2`).** The client slots `conversation.input.dock` / `plugins.item` / `settings.section`, the settings service `ctx.configForms` (namespace = profile entry id `jira-tasks`), and the `ctx.effect` / `configForms.whileServed` disposal contracts all follow the 0.1.7 interfaces; the 0.1.6-era `settingsScope` / `settings.register` / `settings.plugin.item` APIs are gone and no longer used.
 
 ## Features
 
 - 📋 Panel shown below the composer in both new and active sessions (aligned with the input width in new sessions)
 - 👤 Defaults to the current user (`assignee = currentUser()`) with status `开启 / 重新开启` (Open / Reopened)
-- ⚙️ **Settings → Plugins → JIRA** edits the base URL and access token (the token is written to the credential store and never sent back to the browser)
+- ⚙️ **Settings → JIRA 配置** (left navigation, below Agent presets) edits the base URL and access token (the token is written to the credential store and never sent back to the browser); the same JIRA card stays available in the Plugins panel
 - 🟢 The card auto-probes the connection and shows a status light: green = usable, red = unusable, grey = unconfigured; **Test connection** verifies unsaved drafts immediately
 - ⚙️ Project key and JQL are saved per workspace; unconfigured workspaces show "unconfigured"
 - 🔄 Auto-query on every new session, with a one-click refresh (⟳)
@@ -62,7 +62,7 @@ In a DSH session, use the Cordis tools: `cordis_define` (`kind: new`, `idPrefix:
 
 ### 1. JIRA base URL and token
 
-Open **Settings → Plugins → Plugin configuration → JIRA** and fill in:
+Open **Settings → JIRA 配置** (the last item in the left navigation, below Agent presets; the JIRA card in the Plugins panel is the same form) and fill in:
 
 - **JIRA base URL**: e.g. `http://jira.example.com/` (written to this plugin entry's `Config.baseUrl` — the `jira-tasks` row in the profile's `cordis.patch.yml` — and read back by the form; a host-refused write now surfaces as an error instead of failing silently)
 - **Access token / PAT**: written to the credential store (`$DSH_HOME/.credentials.yaml`) under the plugin-owned ref `JIRA_TASKS_TOKEN`; the browser only ever sees "configured", never the token itself
@@ -163,13 +163,12 @@ JIRA_TASKS_TOKEN (settings card) > JIRA_API_TOKEN > JIRA_TOKEN
 │ on mount/refresh: fetch POST                 │      │ credentials.resolve(TOKEN_REFS)    │
 │ render: list / error / unconfigured          │      │ subprocess.spawn(curl ...)         │
 │ localStorage: per-workspace key/JQL          │      │ parse stdout JSON                  │
-│ plugins.item (Settings card)                 │      │ return {ok, issues}                │
+│ plugins.item (Plugins panel card)            │      │ return {ok, issues}                │
+│ settings.section (Settings nav page)         │      │                                    │
 └──────────────────────────────────────────────┘      └────────────────────────────────────┘
-                                                    └────────────────────────────────┘
-```
 
 - **Host**: declares the entry's own `Config` (`baseUrl`, `volatile` — since DSH 0.1.5 a settings page is built from it; `settings.configure({ auto: false }, ctx.fiber)` turns the auto-generated page off and hands its disposer back to `ctx.effect`) plus `webServer` routes `POST /jira/api/search` and `POST /jira/api/test`, each wrapped in its own `ctx.effect` (a reload otherwise hits "duplicate route" and fails activation; non-POST requests get 405); the token comes from the `credentials` service resolved in the order `JIRA_TASKS_TOKEN` (written by the Settings card) → `JIRA_API_TOKEN` → `JIRA_TOKEN` (`$DSH_HOME/.credentials.yaml` / environment, hot-reloaded), so a saved card token overrides the environment; queries run through `subprocess` spawning `curl` directly, with the auth header passed via stdin (`--config -`) so the token never appears in argv.
-- **Client**: a standard `window.__ModuleLoader__.load({ id, factory })` web bundle requiring only `"react"`; registers **only `conversation.input.dock`** (`order: 10`) — that seat renders in both new and active sessions and is a full-width row of `composerStack` (`flex-direction: column`), where the panel's own CSS `order: 99` places it below the input card at the card's width. `conversation.composer.dock` is deliberately NOT used: in 0.1.7 it renders into InputBar's `.dock` **row**, side by side with the context meter, so a full-width panel there gets its right-hand content covered by the meter. Also registers the plugin configuration card on `plugins.item` (`id: "jira-tasks"`) — the address form comes from `ctx.configForms.get("jira-tasks")` and the token is written through `remote.credentials` to `JIRA_TASKS_TOKEN`; `configForms.whileServed` keeps it hidden when the host serves no such namespace. The card's `summary` view is rendered by a dispatcher that calls **no hooks**, while the form lives in a separate `JiraSettingsPage`, so flipping `view` on one mounted instance never changes its hook count.
+- **Client**: a standard `window.__ModuleLoader__.load({ id, factory })` web bundle requiring only `"react"`; registers **only `conversation.input.dock`** (`order: 10`) — that seat renders in both new and active sessions and is a full-width row of `composerStack` (`flex-direction: column`), where the panel's own CSS `order: 99` places it below the input card at the card's width. `conversation.composer.dock` is deliberately NOT used: in 0.1.7 it renders into InputBar's `.dock` **row**, side by side with the context meter, so a full-width panel there gets its right-hand content covered by the meter. The address/token form comes from `ctx.configForms.get("jira-tasks")` and the token is written through `remote.credentials` to `JIRA_TASKS_TOKEN`; `configForms.whileServed` keeps it hidden when the host serves no such namespace. It is registered in **two places**: the Plugins-panel card `plugins.item` (`id: "jira-tasks"`, `order: 41`) and a Settings-navigation section `settings.section` (`id: "jira-tasks"`, `order: 30` — above Agent presets' 20, so it sits below it; `label: "JIRA 配置"`; ids outside the shell's `navIcon` allow-list fall back to the default gear icon). Both share one `JiraSettingsPage`, whose outer container is chosen by the external `variant: "page"` prop (`li.jt-set-card` card vs `div.jt-set-page` page) while the field block is the same array. The card's `summary` view is rendered by a dispatcher that calls **no hooks**, while the form lives in a separate `JiraSettingsPage`, so flipping `view` on one mounted instance never changes its hook count.
 - **Why not the `shell` service**: `shell` wraps commands with `sandbox-exec`, which is broken on some macOS versions (`sandbox_apply: Operation not permitted`); `subprocess` is the raw process seam without this issue.
 - **One registration covers both states**: `conversation.input.dock` renders whenever a session and its input exist, so new and active sessions need no separate registrations (the older `composer.dock` + blank-session de-duplication was both unnecessary under 0.1.7 and the cause of the meter-row collision).
 
@@ -180,7 +179,7 @@ JIRA_TASKS_TOKEN (settings card) > JIRA_API_TOKEN > JIRA_TOKEN
 | Persistence | Lost on restart | Survives restart |
 | Client→Host | `host.call` / `harness.handle` | `webServer` route + `fetch` |
 | Client bundle | Injected per session | `/plugins/dsh-jira-tasks/client.js` |
-| Config / credentials | Env / `.credentials.yaml` only (no Settings card) | Settings card + same `.credentials.yaml` fallback |
+| Config / credentials | Env / `.credentials.yaml` only (no Settings card) | Settings nav page + Plugins-panel card + same `.credentials.yaml` fallback |
 </details>
 
 ## License

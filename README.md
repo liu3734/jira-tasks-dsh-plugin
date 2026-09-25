@@ -4,9 +4,9 @@
 
 **中文** · [English](README.en.md)
 
-在 DSH 会话**输入框下方**展示当前 JIRA 项目**指派给当前用户**的「开启 / 重新开启」任务列表。JIRA 地址与令牌在**设置 → 插件 → JIRA** 中配置（`JIRA_BASE_URL` / `JIRA_API_TOKEN` 作为回退）；项目 Key 与 JQL **按工作区配置**并持久化。
+在 DSH 会话**输入框下方**展示当前 JIRA 项目**指派给当前用户**的「开启 / 重新开启」任务列表。JIRA 地址与令牌在**设置 → JIRA 配置**（设置对话框左侧导航）中配置（`JIRA_BASE_URL` / `JIRA_API_TOKEN` 作为回退）；项目 Key 与 JQL **按工作区配置**并持久化。
 
-> **适配的 DSH 版本：0.1.7（`0.1.7-rc.2` 实测）。** 客户端槽位 `conversation.input.dock` / `plugins.item`、设置服务 `ctx.configForms`（命名空间 = profile 条目 id `jira-tasks`）、`ctx.effect` / `configForms.whileServed` 的注销契约均按 0.1.7 的接口实现；0.1.6 及更早版本的 `settingsScope` / `settings.register` / `settings.plugin.item` 已不再使用。
+> **适配的 DSH 版本：0.1.7（`0.1.7-rc.2` 实测）。** 客户端槽位 `conversation.input.dock` / `plugins.item` / `settings.section`、设置服务 `ctx.configForms`（命名空间 = profile 条目 id `jira-tasks`）、`ctx.effect` / `configForms.whileServed` 的注销契约均按 0.1.7 的接口实现；0.1.6 及更早版本的 `settingsScope` / `settings.register` / `settings.plugin.item` 已不再使用。
 
 ## 功能
 
@@ -16,7 +16,7 @@
 <img width="1972" height="746" alt="image" src="https://github.com/user-attachments/assets/9f543e04-a5ad-4b86-85c8-baa2de26f44e" />
 
 - 👤 默认仅显示当前用户（`assignee = currentUser()`）的「开启 / 重新开启」任务
-- ⚙️ **设置 → 插件 → JIRA** 配置 JIRA 地址与访问令牌（令牌写入凭据存储，不回传前端）
+- ⚙️ **设置 → JIRA 配置**（设置对话框左侧导航，位于「Agent 预设」下方）配置 JIRA 地址与访问令牌（令牌写入凭据存储，不回传前端）；插件面板里的同一张 JIRA 卡片仍然可用
 - 🟢 设置卡片自动探测连接并显示状态灯：绿=可用、红=不可用、灰=未配置；点「测试连接」可用**未保存的草稿值**即时验证
 
 <img width="1590" height="1574" alt="image" src="https://github.com/user-attachments/assets/af5f11c6-aa9a-4c3b-84ca-cff6c0017b22" />
@@ -71,7 +71,7 @@ dsh plugin --profile web add github:liu3734/jira-tasks-dsh-plugin
 
 ### 1. JIRA 地址与令牌
 
-打开 **设置 → 插件 → 插件配置 → JIRA**，填写：
+打开 **设置 → JIRA 配置**（左侧导航最后一项，在「Agent 预设」下面；插件面板里的 JIRA 卡片是同一张表单），填写：
 
 - **JIRA 地址**：如 `http://jira.example.com/`（写入本插件 profile 条目 `jira-tasks` 的 `Config.baseUrl`，即 profile 的 `cordis.patch.yml`，可在界面回读；保存被宿主拒绝时会直接报错，不会静默失败）
 - **访问令牌 / PAT**：写入凭据存储（`$DSH_HOME/.credentials.yaml`，引用名是插件自有的 `JIRA_TASKS_TOKEN`），前端只显示"已配置"，不回传令牌本身
@@ -134,8 +134,8 @@ dsh plugin --profile web remove dsh-jira-tasks
 | 提示 | 处理 |
 |---|---|
 | 未设置项目 Key | 面板未配置项目，点标题右侧 ⚙ 填写项目 Key |
-| 未配置 JIRA 地址（设置 → 插件 → JIRA，或环境变量 JIRA_BASE_URL） | 地址未写入，见上文「配置 1」 |
-| 未配置 JIRA 令牌（设置 → 插件 → JIRA，或环境变量 JIRA_API_TOKEN） | 令牌未写入，见上文「配置 1」 |
+| 未配置 JIRA 地址（设置 → JIRA 配置，或环境变量 JIRA_BASE_URL） | 地址未写入，见上文「配置 1」 |
+| 未配置 JIRA 令牌（设置 → JIRA 配置，或环境变量 JIRA_API_TOKEN） | 令牌未写入，见上文「配置 1」 |
 | 401 … | 令牌无效或认证方式不对；先 `curl -H "Authorization: Bearer <token>" <base>/rest/api/2/myself` 验证 |
 | 无法解析 JIRA 响应：… | 网络 / 代理问题，curl 无输出 |
 </details>
@@ -175,12 +175,13 @@ JIRA_TASKS_TOKEN（设置页） > JIRA_API_TOKEN > JIRA_TOKEN
 │   ↓ 挂载 / 刷新时 fetch POST            │   │ credentials.resolve(TOKEN_REFS)     │
 │ 渲染：任务列表 / 错误 / 未配置          │   │ subprocess.spawn(curl …)            │
 │ localStorage 按工作区存取项目 Key/JQL   │   │ ↓ stdout JSON                       │
-│ plugins.item（设置页卡片）              │   │ 解析 issues → 返回 {ok,issues}      │
+│ plugins.item（插件面板卡片）            │   │ 解析 issues → 返回 {ok,issues}      │
+│ settings.section（设置导航整页）        │   │                                     │
 └────────────────────────────────────────┘   └────────────────────────────────────┘
 ```
 
 - **Host**：声明条目自身的 `Config`（`baseUrl`，`volatile`，DSH 0.1.5 起设置页的表单直接来自它；`settings.configure({ auto: false }, ctx.fiber)` 关掉自动生成页，并把返回的注销函数交回 `ctx.effect`）与 `webServer` 路由 `POST /jira/api/search`、`POST /jira/api/test`（两条路由各自包在 `ctx.effect` 里，卸载/重载时先释放，否则重挂载会撞上「重复路由」直接抛错；非 POST 返回 405）；令牌经 `credentials` 服务按 `JIRA_TASKS_TOKEN`（设置页写入）→ `JIRA_API_TOKEN` → `JIRA_TOKEN` 的顺序解析（`$DSH_HOME/.credentials.yaml` / 环境变量，热加载），因此设置页保存的令牌能覆盖环境变量；查询用 `subprocess` 直接 `spawn curl`，认证头经 stdin（`--config -`）传入，令牌不进入命令行参数。
-- **Client**：`window.__ModuleLoader__.load({ id, factory })` 标准 web bundle，仅 `require("react")`；**只注册 `conversation.input.dock` 一处**（`order: 10`）。该槽位在新会话与活跃会话下都会渲染，属于 `composerStack`（`flex-direction: column`）的整宽纵向行；面板元素自身 `flex order: 99` 排到输入卡之后，即输入框下方，并以 `--dsh-composer-side-clearance` / `--dsh-composer-card-max-width` 与输入卡等宽。之所以不用 `conversation.composer.dock`：0.1.7 里那一槽位渲染进 InputBar 的 `.dock`**横向** flex 行，与上下文占用环并排，整宽面板会被占用环压住右侧内容。插件配置卡片注册到 `plugins.item`（`id: "jira-tasks"`），表单来自 `ctx.configForms.get("jira-tasks")`（地址）与 `remote.credentials`（令牌写入 `JIRA_TASKS_TOKEN`），并用 `configForms.whileServed` 保证宿主未提供该命名空间时不显示；`plugins.item` 的摘要位由一个**不调用任何 hook** 的分发组件负责，表单在独立的 `JiraSettingsPage` 里，避免同一实例在 `view` 切换时改变 hook 数量。
+- **Client**：`window.__ModuleLoader__.load({ id, factory })` 标准 web bundle，仅 `require("react")`；**只注册 `conversation.input.dock` 一处**（`order: 10`）。该槽位在新会话与活跃会话下都会渲染，属于 `composerStack`（`flex-direction: column`）的整宽纵向行；面板元素自身 `flex order: 99` 排到输入卡之后，即输入框下方，并以 `--dsh-composer-side-clearance` / `--dsh-composer-card-max-width` 与输入卡等宽。之所以不用 `conversation.composer.dock`：0.1.7 里那一槽位渲染进 InputBar 的 `.dock`**横向** flex 行，与上下文占用环并排，整宽面板会被占用环压住右侧内容。插件地址与令牌的表单来自 `ctx.configForms.get("jira-tasks")`（地址）与 `remote.credentials`（令牌写入 `JIRA_TASKS_TOKEN`），并用 `configForms.whileServed` 保证宿主未提供该命名空间时不显示。表单**注册在两处**：插件面板卡片 `plugins.item`（`id: "jira-tasks"`，`order: 41`，原入口保留）与设置对话框左侧导航项 `settings.section`（`id: "jira-tasks"`，`order: 30` —— 大于「Agent 预设」的 20，所以显示在它下方；`label: "JIRA 配置"`；未在 `navIcon` 白名单里的 id 由设置外壳回退成默认齿轮图标）。两者共用同一个 `JiraSettingsPage`：由外部 prop `variant: "page"` 决定外层容器（`li.jt-set-card` 卡片 / `div.jt-set-page` 整页），字段区是同一份数组。`plugins.item` 的摘要位由一个**不调用任何 hook** 的分发组件负责，表单在独立的 `JiraSettingsPage` 里，避免同一实例在 `view` 切换时改变 hook 数量。
 - **为什么不用 `shell` 服务**：`shell` 会套 `sandbox-exec`，部分 macOS 上不可用（`sandbox_apply: Operation not permitted`）；`subprocess` 是原始进程缝，无此问题。
 - **一处注册覆盖两种会话**：`conversation.input.dock` 只要有 session + input 就会渲染，新会话与活跃会话无需分别注册（旧版曾用 `composer.dock` + 空白判定去重，0.1.7 下既不必要、又会与占用环抢同一行）。
 
@@ -191,7 +192,7 @@ JIRA_TASKS_TOKEN（设置页） > JIRA_API_TOKEN > JIRA_TOKEN
 | 持久性 | 重启丢失 | 重启保留 |
 | Client→Host 通信 | `host.call` / `harness.handle` | `webServer` 路由 + `fetch` |
 | 客户端 bundle | 会话内注入 | `/plugins/dsh-jira-tasks/client.js` |
-| 配置 / 凭据 | 仅环境变量 / `.credentials.yaml`（无设置页卡片） | 设置页卡片 + 同一 `.credentials.yaml` 回退 |
+| 配置 / 凭据 | 仅环境变量 / `.credentials.yaml`（无设置页表单） | 设置导航「JIRA 配置」页 + 插件面板卡片 + 同一 `.credentials.yaml` 回退 |
 </details>
 
 ## License
