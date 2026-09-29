@@ -6,7 +6,9 @@
 
 在 DSH 会话**输入框下方**展示当前 JIRA 项目**指派给当前用户**的「开启 / 重新开启」任务列表。JIRA 地址与令牌在**设置 → JIRA 配置**（设置对话框左侧导航）中配置（`JIRA_BASE_URL` / `JIRA_API_TOKEN` 作为回退）；项目 Key 与 JQL **按工作区配置**并持久化。
 
-> **适配的 DSH 版本：0.1.7（`0.1.7-rc.2` 实测）。** 客户端槽位 `conversation.input.dock` / `plugins.item` / `settings.section`、设置服务 `ctx.configForms`（命名空间 = profile 条目 id `jira-tasks`）、`ctx.effect` / `configForms.whileServed` 的注销契约均按 0.1.7 的接口实现；0.1.6 及更早版本的 `settingsScope` / `settings.register` / `settings.plugin.item` 已不再使用。
+> **适配的 DSH 版本：0.1.7 与 0.2.0（`0.1.7-rc.2`、`0.2.0-rc.2` 实测），浏览器（web profile）与桌面端（Electron 独占的 desktop profile）通用。**
+> 客户端槽位 `conversation.input.dock` / `plugins.item` / `settings.section`、设置服务 `ctx.configForms`（命名空间 = profile 条目 id `jira-tasks`）、`ctx.effect` / `configForms.whileServed` 的注销契约在 0.1.7 → 0.2.0 之间没有变化（逐包 diff 过），所以同一份 `lib/` 同时覆盖两版；0.1.6 及更早版本的 `settingsScope` / `settings.register` / `settings.plugin.item` 已不再使用。
+> 包内声明了 DSH 兼容范围 `>=0.1.7-rc.2 <0.3.0-0`（`engines.dsh` + 可选 peer `@deepseek-ai/dsh`）：0.2.0 起 DSH 会在**安装与启动**时校验该范围，不满足的版本会被跳过并在插件管理器里给出 `allow-version` 精确豁免入口（peer 标了 `optional`，`pnpm` 不会把整套 `@deepseek-ai/dsh` 装进 profile）。
 
 ## 功能
 
@@ -30,7 +32,7 @@
 
 ## 安装
 
-包已发布到公共 npm（`dsh-jira-tasks`）；仓库的发布工作流同时把同一版本发布到 GitHub Packages（作用域包名 `@liu3734/dsh-jira-tasks`）。从 npm 安装（推荐）：
+包已发布到公共 npm（`dsh-jira-tasks`）；仓库的发布工作流同时把同一版本发布到 GitHub Packages（作用域包名 `@liu3734/dsh-jira-tasks`）。**浏览器（web profile）**从 npm 安装（推荐）：
 
 ```bash
 dsh plugin --profile web add dsh-jira-tasks
@@ -44,19 +46,35 @@ dsh plugin --profile web add github:liu3734/jira-tasks-dsh-plugin
 
 **重启 DSH** 后生效。
 
-> **装完没反应？先查 `dsh.profile.bundles`。** DSH 只有当 `~/.dsh/profiles/web/package.json` 的 `dsh.profile.bundles` 里列了 `"dsh-jira-tasks"` 时才把本包当作 profile 层挂载；只出现在 `dependencies` 里不够——此时启动日志会打 `patch: entry "jira-tasks" not found`，插件静默不加载。`dsh plugin --profile web add` 一般会补上这一行，但该包已在 `dependencies` 中时重装不会重新补，手动往 `dsh.profile.bundles` 追加 `"dsh-jira-tasks"` 即可。
+### 桌面端（DeepSeek Harness.app）
+
+桌面端不用 `web` profile，而是 Electron 独占的 **`desktop` profile**（`~/.dsh/profiles/desktop/`）。该 profile 名被应用保留：**npm 全局安装的 `dsh` 会直接拒绝** `--profile desktop` 的 boot 与 plugin 操作（`profile "desktop" is managed exclusively by the Electron application`），必须用桌面端自带的命令：
+
+1. 先打开一次桌面端（由应用初始化 desktop profile），然后**完全退出桌面端**
+2. 应用内菜单 → **管理 dsh 命令 / Manage dsh Command** → Install，把桌面端自带的 `dsh` 装进 PATH
+3. 安装插件：
+
+   ```bash
+   dsh plugin --profile desktop add dsh-jira-tasks
+   ```
+
+4. 确认 `~/.dsh/profiles/desktop/package.json` 的 `dsh.profile.bundles` 里有 `"dsh-jira-tasks"`，再启动桌面端
+
+> 桌面端渲染进程的 origin 是 `dsh-app://app`。非静态资源的请求由 Electron 转发到本机 Host，所以插件的 `fetch("/jira/api/search")` 这类绝对路径照常可用；任务链接的 `target="_blank"` 由 Electron 交给系统浏览器打开。项目 Key / JQL 存在该 origin 的 localStorage 里，**与浏览器访问 `http://127.0.0.1:<port>` 时的配置互不相通**，两边各配一次即可。
+
+> **装完没反应？先查 `dsh.profile.bundles`。** DSH 只有当对应 profile 的 `package.json`（`~/.dsh/profiles/web/package.json` 或 `~/.dsh/profiles/desktop/package.json`）里的 `dsh.profile.bundles` 列了 `"dsh-jira-tasks"` 时才把本包当作 profile 层挂载；只出现在 `dependencies` 里不够——此时启动日志会打 `patch: entry "jira-tasks" not found`，插件静默不加载。`dsh plugin --profile <name> add` 一般会补上这一行，但该包已在 `dependencies` 中时重装不会重新补，手动往 `dsh.profile.bundles` 追加 `"dsh-jira-tasks"` 即可。
 
 > 若改用 GitHub Packages 源：先在 profile 的 `.npmrc` 配置 `@liu3734:registry=https://npm.pkg.github.com/` 及读取令牌，再执行 `dsh plugin --profile web add @liu3734/dsh-jira-tasks`。
 
 <details>
 <summary>手动安装（不使用 npm）</summary>
 
-1. 将本仓库（仓库根目录即包目录）复制为 `~/.dsh/profiles/web/packages/dsh-jira-tasks/`（可忽略 `.git/`）
-2. 编辑 `~/.dsh/profiles/web/package.json`：
+1. 将本仓库（仓库根目录即包目录）复制为 profile 内的 `packages/dsh-jira-tasks/`（可忽略 `.git/`）——web 用 `~/.dsh/profiles/web/`，桌面端用 `~/.dsh/profiles/desktop/`
+2. 编辑该 profile 的 `package.json`：
    - `dependencies` 增加：`"dsh-jira-tasks": "file:./packages/dsh-jira-tasks"`
    - `dsh.profile.bundles` 追加：`"dsh-jira-tasks"`
 3. 在 profile 目录执行 `pnpm install`
-4. 重启 DSH
+4. 重启 DSH（桌面端需完全退出后重新打开）
 
 > 注：`pnpm install` 会把包**复制**到 `node_modules/`（非符号链接），改动源码后需同步 `node_modules/dsh-jira-tasks` 或重跑 install。
 </details>
@@ -118,10 +136,33 @@ project = "{projectKey}" AND status in ("开启", "重新开启") AND assignee =
 
 > 状态名按中文工作流（"开启"/"重新开启"）配置；若 JIRA 用英文状态（Open/Reopened），在 ⚙ 中填写自定义 JQL 即可。
 
+## 兼容性与验证
+
+| 维度 | 覆盖 |
+|---|---|
+| DSH 版本 | `0.1.7-rc.2`、`0.2.0-rc.2`（实测）；声明范围 `>=0.1.7-rc.2 <0.3.0-0`，即 0.1.7 与 0.2.x，不含 0.3.0 及其预发布 |
+| 运行形态 | 浏览器（`dsh web` / web profile）、桌面端 DeepSeek Harness.app（Electron，desktop profile，渲染进程 origin `dsh-app://app`） |
+| 宿主侧 | `Config` / `webServer.register` / `subprocess.spawn` / `credentials.resolve` / `settings.configure`：0.1.7 → 0.2.0 签名未变 |
+| 客户端 | `window.__ModuleLoader__.load`、`slots.inject/register`、`configForms.get/whileServed`、`remote.credentials`、槽位 `conversation.input.dock` / `plugins.item` / `settings.section`：0.1.7 → 0.2.0 契约未变 |
+
+验证方式（不改动用户 profile，临时 `DSH_HOME` 起真实服务）：
+
+```bash
+# 用目标版本的 dsh 起一个隔离实例，profile 的 dsh.profile.bundles 含 dsh-jira-tasks
+DSH_HOME=/tmp/dsh-check node <dsh-0.2.0-rc.2>/lib/bin.js --profile web --no-open --port 19399
+
+curl -sX POST http://127.0.0.1:19399/jira/api/test   -d '{}'                      # 连通性 / 鉴权
+curl -sX POST http://127.0.0.1:19399/jira/api/search -d '{"projectKey":"<KEY>"}'  # 任务查询
+curl -s "http://127.0.0.1:19399/?token=<启动日志里的 token>" | grep -o dsh-jira-tasks  # 客户端进入 __DSH_BOOT__ 模块图
+```
+
+桌面端另需确认：客户端 bundle 出现在应用 `Code Cache`（说明浏览器端已加载执行）、`localStorage` 里存在 `dsh.jiraTasks.config.v1`（说明面板可用且按工作区写入）。
+
 ## 卸载
 
 ```bash
-dsh plugin --profile web remove dsh-jira-tasks
+dsh plugin --profile web remove dsh-jira-tasks        # 浏览器
+dsh plugin --profile desktop remove dsh-jira-tasks    # 桌面端（需桌面端自带的 dsh 命令）
 ```
 
 ## 常见问题
@@ -157,10 +198,11 @@ JIRA_TASKS_TOKEN（设置页） > JIRA_API_TOKEN > JIRA_TOKEN
 <details>
 <summary>面板不显示</summary>
 
-- 确认已安装并**重启 DSH**；新会话面板位于输入框下方
-- 检查 `~/.dsh/profiles/web/package.json` 的 `dsh.profile.bundles` 是否包含 `"dsh-jira-tasks"`（这是最常见的漏装原因，见「安装」一节的提示）
-- 检查 DSH 启动日志：出现 `patch: entry "jira-tasks" not found` 即为 profile 层未挂载；出现 `webserver: duplicate exact route` 说明同一路由被注册了两次（插件自身已用 `ctx.effect` 释放旧路由，若仍有说明有第二份副本）
-- 浏览器控制台若报 `client-modules: could not load "dsh-jira-tasks"`，说明 `/plugins/dsh-jira-tasks/client.js` 没取到——确认 `package.json` 的 `exports["./client"]` 指向已构建的 `lib/client.js`
+- 确认已安装并**重启 DSH**（桌面端要完全退出应用再打开）；新会话面板位于输入框下方
+- 检查对应 profile 的 `dsh.profile.bundles` 是否包含 `"dsh-jira-tasks"`：浏览器看 `~/.dsh/profiles/web/package.json`，**桌面端看 `~/.dsh/profiles/desktop/package.json`**（最常见的漏装原因，见「安装」一节的提示；桌面端该 profile 只能用应用自带的 dsh 命令改）
+- 检查 DSH 启动日志：出现 `patch: entry "jira-tasks" not found` 即为 profile 层未挂载；出现 `Plugin dsh-jira-tasks@<版本> is incompatible with dsh <运行版本>` 说明运行版本落在声明范围 `>=0.1.7-rc.2 <0.3.0-0` 之外，该包会被跳过（可按提示用 `dsh plugin allow-version` 或插件管理器授精确版本豁免）；出现 `webserver: duplicate exact route` 说明同一路由被注册了两次（插件自身已用 `ctx.effect` 释放旧路由，若仍有说明有第二份副本）
+- 浏览器 / 桌面端控制台若报 `client-modules: could not load "dsh-jira-tasks"`，说明 `/plugins/dsh-jira-tasks/client.js` 没取到——确认 `package.json` 的 `exports["./client"]` 指向已构建的 `lib/client.js`
+- 桌面端面板显示「未配置」但你记得配过：项目 Key / JQL 按 **origin** 存 localStorage，`dsh-app://app`（桌面端内置窗口）与 `http://127.0.0.1:<port>`（浏览器）是两份独立配置
 </details>
 
 ## 架构与实现细节
@@ -181,8 +223,9 @@ JIRA_TASKS_TOKEN（设置页） > JIRA_API_TOKEN > JIRA_TOKEN
 ```
 
 - **Host**：声明条目自身的 `Config`（`baseUrl`，`volatile`，DSH 0.1.5 起设置页的表单直接来自它；`settings.configure({ auto: false }, ctx.fiber)` 关掉自动生成页，并把返回的注销函数交回 `ctx.effect`）与 `webServer` 路由 `POST /jira/api/search`、`POST /jira/api/test`（两条路由各自包在 `ctx.effect` 里，卸载/重载时先释放，否则重挂载会撞上「重复路由」直接抛错；非 POST 返回 405）；令牌经 `credentials` 服务按 `JIRA_TASKS_TOKEN`（设置页写入）→ `JIRA_API_TOKEN` → `JIRA_TOKEN` 的顺序解析（`$DSH_HOME/.credentials.yaml` / 环境变量，热加载），因此设置页保存的令牌能覆盖环境变量；查询用 `subprocess` 直接 `spawn curl`，认证头经 stdin（`--config -`）传入，令牌不进入命令行参数。
-- **Client**：`window.__ModuleLoader__.load({ id, factory })` 标准 web bundle，仅 `require("react")`；**只注册 `conversation.input.dock` 一处**（`order: 10`）。该槽位在新会话与活跃会话下都会渲染，属于 `composerStack`（`flex-direction: column`）的整宽纵向行；面板元素自身 `flex order: 99` 排到输入卡之后，即输入框下方，并以 `--dsh-composer-side-clearance` / `--dsh-composer-card-max-width` 与输入卡等宽。之所以不用 `conversation.composer.dock`：0.1.7 里那一槽位渲染进 InputBar 的 `.dock`**横向** flex 行，与上下文占用环并排，整宽面板会被占用环压住右侧内容。插件地址与令牌的表单来自 `ctx.configForms.get("jira-tasks")`（地址）与 `remote.credentials`（令牌写入 `JIRA_TASKS_TOKEN`），并用 `configForms.whileServed` 保证宿主未提供该命名空间时不显示。表单**注册在两处**：插件面板卡片 `plugins.item`（`id: "jira-tasks"`，`order: 41`，原入口保留）与设置对话框左侧导航项 `settings.section`（`id: "jira-tasks"`，`order: 30` —— 大于「Agent 预设」的 20，所以显示在它下方；`label: "JIRA 配置"`；未在 `navIcon` 白名单里的 id 由设置外壳回退成默认齿轮图标）。两者共用同一个 `JiraSettingsPage`：由外部 prop `variant: "page"` 决定外层容器（`li.jt-set-card` 卡片 / `div.jt-set-page` 整页），字段区是同一份数组。`plugins.item` 的摘要位由一个**不调用任何 hook** 的分发组件负责，表单在独立的 `JiraSettingsPage` 里，避免同一实例在 `view` 切换时改变 hook 数量。
+- **Client**：`window.__ModuleLoader__.load({ id, factory })` 标准 web bundle，仅 `require("react")`；**只注册 `conversation.input.dock` 一处**（`order: 10`）。该槽位在新会话与活跃会话下都会渲染，属于 `composerStack`（`flex-direction: column`）的整宽纵向行；面板元素自身 `flex order: 99` 排到输入卡之后，即输入框下方，并以 `--dsh-composer-side-clearance` / `--dsh-composer-card-max-width` 与输入卡等宽。之所以不用 `conversation.composer.dock`：0.1.7 / 0.2.0 里那一槽位都渲染进 InputBar 的 `.dock`**横向** flex 行，与上下文占用环并排，整宽面板会被占用环压住右侧内容。插件地址与令牌的表单来自 `ctx.configForms.get("jira-tasks")`（地址）与 `remote.credentials`（令牌写入 `JIRA_TASKS_TOKEN`），并用 `configForms.whileServed` 保证宿主未提供该命名空间时不显示。表单**注册在两处**：插件面板卡片 `plugins.item`（`id: "jira-tasks"`，`order: 41`，原入口保留）与设置对话框左侧导航项 `settings.section`（`id: "jira-tasks"`，`order: 30` —— 大于「Agent 预设」的 20，所以显示在它下方；`label: "JIRA 配置"`；未在 `navIcon` 白名单里的 id 由设置外壳回退成默认齿轮图标）。两者共用同一个 `JiraSettingsPage`：由外部 prop `variant: "page"` 决定外层容器（`li.jt-set-card` 卡片 / `div.jt-set-page` 整页），字段区是同一份数组。`plugins.item` 的摘要位由一个**不调用任何 hook** 的分发组件负责，表单在独立的 `JiraSettingsPage` 里，避免同一实例在 `view` 切换时改变 hook 数量。
 - **为什么不用 `shell` 服务**：`shell` 会套 `sandbox-exec`，部分 macOS 上不可用（`sandbox_apply: Operation not permitted`）；`subprocess` 是原始进程缝，无此问题。
+- **桌面端为什么不用改代码**：桌面端 Host 与 web profile 是同一套 DSH（同样是 `@deepseek-ai/dsh-web-app` + `dsh-host-webserver`），渲染进程 origin 是 `dsh-app://app`，非静态资源请求由 Electron 的 `protocol.handle` 带上 Host cookie 转发到本机 Host，所以 `fetch("/jira/api/*")` 与 `/plugins/...` 都照常工作；`http(s)` 的 `target="_blank"` 由主窗口的 `setWindowOpenHandler` 交给系统浏览器。唯一差异是 localStorage 按 origin 隔离，配置需在桌面端与浏览器各存一份。
 - **一处注册覆盖两种会话**：`conversation.input.dock` 只要有 session + input 就会渲染，新会话与活跃会话无需分别注册（旧版曾用 `composer.dock` + 空白判定去重，0.1.7 下既不必要、又会与占用环抢同一行）。
 
 **与动态插件版的差异**

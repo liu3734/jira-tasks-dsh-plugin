@@ -6,7 +6,9 @@
 
 Shows the current JIRA project's **open / reopened** issues **assigned to the current user** below the DSH composer input. The JIRA base URL and token are configured in **Settings → JIRA 配置** (the settings dialog's left navigation) (`JIRA_BASE_URL` / `JIRA_API_TOKEN` act as fallback); the project key and JQL are **configured per workspace** and persisted.
 
-> **DSH version targeted: 0.1.7 (verified on `0.1.7-rc.2`).** The client slots `conversation.input.dock` / `plugins.item` / `settings.section`, the settings service `ctx.configForms` (namespace = profile entry id `jira-tasks`), and the `ctx.effect` / `configForms.whileServed` disposal contracts all follow the 0.1.7 interfaces; the 0.1.6-era `settingsScope` / `settings.register` / `settings.plugin.item` APIs are gone and no longer used.
+> **DSH versions targeted: 0.1.7 and 0.2.0 (verified on `0.1.7-rc.2` and `0.2.0-rc.2`), on both the browser (web profile) and the Desktop app (the Electron-owned desktop profile).**
+> The client slots `conversation.input.dock` / `plugins.item` / `settings.section`, the settings service `ctx.configForms` (namespace = profile entry id `jira-tasks`), and the `ctx.effect` / `configForms.whileServed` disposal contracts are unchanged between 0.1.7 and 0.2.0 (verified package by package), so one `lib/` covers both; the 0.1.6-era `settingsScope` / `settings.register` / `settings.plugin.item` APIs are gone and no longer used.
+> The package declares its DSH range as `>=0.1.7-rc.2 <0.3.0-0` (`engines.dsh` plus an optional `@deepseek-ai/dsh` peer): since 0.2.0 DSH checks that range **on install and on profile startup**, skipping a mismatched bundle and offering the exact-version `allow-version` exemption in the plugin manager. The peer is marked `optional` so `pnpm` never pulls the whole `@deepseek-ai/dsh` tree into the profile.
 
 ## Features
 
@@ -21,7 +23,7 @@ Shows the current JIRA project's **open / reopened** issues **assigned to the cu
 
 ## Install
 
-Published to npm:
+Published to npm. For the **browser (web profile)**:
 
 ```bash
 dsh plugin --profile web add dsh-jira-tasks
@@ -35,19 +37,35 @@ dsh plugin --profile web add github:liu3734/jira-tasks-dsh-plugin
 
 **Restart DSH** to activate.
 
-> **Nothing shows up? Check `dsh.profile.bundles` first.** DSH mounts this package as a profile layer only when `"dsh-jira-tasks"` is listed in `dsh.profile.bundles` of `~/.dsh/profiles/web/package.json`; being in `dependencies` alone is not enough — the startup log then prints `patch: entry "jira-tasks" not found` and the plugin silently never loads. `dsh plugin --profile web add` normally appends that row, but it will not re-append when the package is already a dependency; add `"dsh-jira-tasks"` to `dsh.profile.bundles` by hand.
+### Desktop app (DeepSeek Harness.app)
+
+The Desktop app does not use the `web` profile; it boots the Electron-owned **`desktop` profile** (`~/.dsh/profiles/desktop/`). That profile name is reserved: an npm-installed `dsh` **refuses** both boot and plugin operations for `--profile desktop` (`profile "desktop" is managed exclusively by the Electron application`). Use the Desktop-provided command instead:
+
+1. Open the Desktop app once (it initializes the desktop profile), then **quit it completely**
+2. In the app menu, open **Manage dsh Command** → Install (puts the Desktop's own `dsh` on your PATH)
+3. Install the plugin:
+
+   ```bash
+   dsh plugin --profile desktop add dsh-jira-tasks
+   ```
+
+4. Confirm `"dsh-jira-tasks"` is listed in `dsh.profile.bundles` of `~/.dsh/profiles/desktop/package.json`, then start the Desktop app
+
+> The renderer's origin is `dsh-app://app`. Electron forwards every non-static request to the local Host with its cookie, so the plugin's absolute-path `fetch("/jira/api/search")` keeps working; `target="_blank"` issue links are handed to the system browser. The project key / JQL live in that origin's localStorage, so **they are separate from the browser configuration at `http://127.0.0.1:<port>`** — configure each surface once.
+
+> **Nothing shows up? Check `dsh.profile.bundles` first.** DSH mounts this package as a profile layer only when `"dsh-jira-tasks"` is listed in `dsh.profile.bundles` of that profile's `package.json` (`~/.dsh/profiles/web/package.json` or `~/.dsh/profiles/desktop/package.json`); being in `dependencies` alone is not enough — the startup log then prints `patch: entry "jira-tasks" not found` and the plugin silently never loads. `dsh plugin --profile <name> add` normally appends that row, but it will not re-append when the package is already a dependency; add `"dsh-jira-tasks"` to `dsh.profile.bundles` by hand.
 
 > Using GitHub Packages instead: configure `@liu3734:registry=https://npm.pkg.github.com/` plus a read token in the profile's `.npmrc`, then run `dsh plugin --profile web add @liu3734/dsh-jira-tasks`.
 
 <details>
 <summary>Manual install (without npm)</summary>
 
-1. Copy this repository (its root is the package directory) to `~/.dsh/profiles/web/packages/dsh-jira-tasks/` (skip `.git/`)
-2. Edit `~/.dsh/profiles/web/package.json`:
+1. Copy this repository (its root is the package directory) into the profile's `packages/dsh-jira-tasks/` (`~/.dsh/profiles/web/` for the browser, `~/.dsh/profiles/desktop/` for the Desktop app; skip `.git/`)
+2. Edit that profile's `package.json`:
    - Add to `dependencies`: `"dsh-jira-tasks": "file:./packages/dsh-jira-tasks"`
    - Append to `dsh.profile.bundles`: `"dsh-jira-tasks"`
 3. Run `pnpm install` in the profile directory
-4. Restart DSH
+4. Restart DSH (the Desktop app must be fully quit and reopened)
 
 > Note: `pnpm install` **copies** the package into `node_modules/` (not a symlink) — after editing sources, sync `node_modules/dsh-jira-tasks` or re-run install.
 </details>
@@ -109,10 +127,33 @@ project = "{projectKey}" AND status in ("开启", "重新开启") AND assignee =
 
 > The status names follow the Chinese workflow (`开启`/`重新开启`). For English statuses (Open/Reopened), set a custom JQL in ⚙.
 
+## Compatibility & verification
+
+| Dimension | Coverage |
+|---|---|
+| DSH versions | `0.1.7-rc.2` and `0.2.0-rc.2` (verified); declared range `>=0.1.7-rc.2 <0.3.0-0` — the 0.1.7 and 0.2.x lines, excluding 0.3.0 and its prereleases |
+| Surfaces | Browser (`dsh web` / web profile) and the Desktop app (Electron, desktop profile, renderer origin `dsh-app://app`) |
+| Host APIs | `Config` / `webServer.register` / `subprocess.spawn` / `credentials.resolve` / `settings.configure` — signatures unchanged from 0.1.7 to 0.2.0 |
+| Client APIs | `window.__ModuleLoader__.load`, `slots.inject/register`, `configForms.get/whileServed`, `remote.credentials`, slots `conversation.input.dock` / `plugins.item` / `settings.section` — contracts unchanged from 0.1.7 to 0.2.0 |
+
+How it was verified (a throwaway `DSH_HOME`, the user's own profile untouched):
+
+```bash
+# Boot the target dsh in isolation; the profile's dsh.profile.bundles lists dsh-jira-tasks
+DSH_HOME=/tmp/dsh-check node <dsh-0.2.0-rc.2>/lib/bin.js --profile web --no-open --port 19399
+
+curl -sX POST http://127.0.0.1:19399/jira/api/test   -d '{}'                      # connectivity / auth
+curl -sX POST http://127.0.0.1:19399/jira/api/search -d '{"projectKey":"<KEY>"}'  # issue query
+curl -s "http://127.0.0.1:19399/?token=<token from the startup log>" | grep -o dsh-jira-tasks  # client bundle in __DSH_BOOT__
+```
+
+For the Desktop app additionally confirm the client bundle appears in the app's `Code Cache` (the renderer loaded and executed it) and that `dsh.jiraTasks.config.v1` exists in its `localStorage` (the panel works and writes per workspace).
+
 ## Uninstall
 
 ```bash
-dsh plugin --profile web remove dsh-jira-tasks
+dsh plugin --profile web remove dsh-jira-tasks        # browser
+dsh plugin --profile desktop remove dsh-jira-tasks    # Desktop app (needs the Desktop-provided dsh)
 ```
 
 ## Troubleshooting
@@ -145,10 +186,11 @@ JIRA_TASKS_TOKEN (settings card) > JIRA_API_TOKEN > JIRA_TOKEN
 <details>
 <summary>Panel does not appear</summary>
 
-- Make sure it is installed and DSH was **restarted**; in new sessions the panel sits below the input
-- Check that `dsh.profile.bundles` in `~/.dsh/profiles/web/package.json` lists `"dsh-jira-tasks"` (the most common cause of a silent no-show — see the Install note)
-- Check the DSH startup log: `patch: entry "jira-tasks" not found` means the profile layer was never composed; `webserver: duplicate exact route` means a route was registered twice (the plugin releases its routes through `ctx.effect`, so this points at a second copy)
-- A browser console error `client-modules: could not load "dsh-jira-tasks"` means `/plugins/dsh-jira-tasks/client.js` was not served — confirm `exports["./client"]` resolves to the built `lib/client.js`
+- Make sure it is installed and DSH was **restarted** (the Desktop app must be fully quit and reopened); in new sessions the panel sits below the input
+- Check `dsh.profile.bundles` in the right profile: `~/.dsh/profiles/web/package.json` for the browser, **`~/.dsh/profiles/desktop/package.json` for the Desktop app** (the most common cause of a silent no-show — see the Install note; that profile can only be edited with the Desktop-provided `dsh`)
+- Check the DSH startup log: `patch: entry "jira-tasks" not found` means the profile layer was never composed; `Plugin dsh-jira-tasks@<version> is incompatible with dsh <runtime>` means the running version falls outside the declared `>=0.1.7-rc.2 <0.3.0-0` range, so the bundle is skipped (follow the message, using `dsh plugin allow-version` or the plugin manager, to grant the exact-version exemption); `webserver: duplicate exact route` means a route was registered twice (the plugin releases its routes through `ctx.effect`, so this points at a second copy)
+- A console error `client-modules: could not load "dsh-jira-tasks"` means `/plugins/dsh-jira-tasks/client.js` was not served — confirm `exports["./client"]` resolves to the built `lib/client.js`
+- The Desktop panel says "unconfigured" although you configured it: project key / JQL are stored per **origin**, so `dsh-app://app` (the built-in window) and `http://127.0.0.1:<port>` (a browser) hold two independent configurations
 </details>
 
 ## Architecture & Implementation Details
@@ -168,8 +210,9 @@ JIRA_TASKS_TOKEN (settings card) > JIRA_API_TOKEN > JIRA_TOKEN
 └──────────────────────────────────────────────┘      └────────────────────────────────────┘
 
 - **Host**: declares the entry's own `Config` (`baseUrl`, `volatile` — since DSH 0.1.5 a settings page is built from it; `settings.configure({ auto: false }, ctx.fiber)` turns the auto-generated page off and hands its disposer back to `ctx.effect`) plus `webServer` routes `POST /jira/api/search` and `POST /jira/api/test`, each wrapped in its own `ctx.effect` (a reload otherwise hits "duplicate route" and fails activation; non-POST requests get 405); the token comes from the `credentials` service resolved in the order `JIRA_TASKS_TOKEN` (written by the Settings card) → `JIRA_API_TOKEN` → `JIRA_TOKEN` (`$DSH_HOME/.credentials.yaml` / environment, hot-reloaded), so a saved card token overrides the environment; queries run through `subprocess` spawning `curl` directly, with the auth header passed via stdin (`--config -`) so the token never appears in argv.
-- **Client**: a standard `window.__ModuleLoader__.load({ id, factory })` web bundle requiring only `"react"`; registers **only `conversation.input.dock`** (`order: 10`) — that seat renders in both new and active sessions and is a full-width row of `composerStack` (`flex-direction: column`), where the panel's own CSS `order: 99` places it below the input card at the card's width. `conversation.composer.dock` is deliberately NOT used: in 0.1.7 it renders into InputBar's `.dock` **row**, side by side with the context meter, so a full-width panel there gets its right-hand content covered by the meter. The address/token form comes from `ctx.configForms.get("jira-tasks")` and the token is written through `remote.credentials` to `JIRA_TASKS_TOKEN`; `configForms.whileServed` keeps it hidden when the host serves no such namespace. It is registered in **two places**: the Plugins-panel card `plugins.item` (`id: "jira-tasks"`, `order: 41`) and a Settings-navigation section `settings.section` (`id: "jira-tasks"`, `order: 30` — above Agent presets' 20, so it sits below it; `label: "JIRA 配置"`; ids outside the shell's `navIcon` allow-list fall back to the default gear icon). Both share one `JiraSettingsPage`, whose outer container is chosen by the external `variant: "page"` prop (`li.jt-set-card` card vs `div.jt-set-page` page) while the field block is the same array. The card's `summary` view is rendered by a dispatcher that calls **no hooks**, while the form lives in a separate `JiraSettingsPage`, so flipping `view` on one mounted instance never changes its hook count.
+- **Client**: a standard `window.__ModuleLoader__.load({ id, factory })` web bundle requiring only `"react"`; registers **only `conversation.input.dock`** (`order: 10`) — that seat renders in both new and active sessions and is a full-width row of `composerStack` (`flex-direction: column`), where the panel's own CSS `order: 99` places it below the input card at the card's width. `conversation.composer.dock` is deliberately NOT used: in 0.1.7 and 0.2.0 alike that seat renders into InputBar's `.dock` **row**, side by side with the context meter, so a full-width panel there gets its right-hand content covered by the meter. The address/token form comes from `ctx.configForms.get("jira-tasks")` and the token is written through `remote.credentials` to `JIRA_TASKS_TOKEN`; `configForms.whileServed` keeps it hidden when the host serves no such namespace. It is registered in **two places**: the Plugins-panel card `plugins.item` (`id: "jira-tasks"`, `order: 41`) and a Settings-navigation section `settings.section` (`id: "jira-tasks"`, `order: 30` — above Agent presets' 20, so it sits below it; `label: "JIRA 配置"`; ids outside the shell's `navIcon` allow-list fall back to the default gear icon). Both share one `JiraSettingsPage`, whose outer container is chosen by the external `variant: "page"` prop (`li.jt-set-card` card vs `div.jt-set-page` page) while the field block is the same array. The card's `summary` view is rendered by a dispatcher that calls **no hooks**, while the form lives in a separate `JiraSettingsPage`, so flipping `view` on one mounted instance never changes its hook count.
 - **Why not the `shell` service**: `shell` wraps commands with `sandbox-exec`, which is broken on some macOS versions (`sandbox_apply: Operation not permitted`); `subprocess` is the raw process seam without this issue.
+- **Why the Desktop app needs no code branch**: its Host is the same DSH as the web profile (same `@deepseek-ai/dsh-web-app` + `dsh-host-webserver`); only the renderer origin differs (`dsh-app://app`), and Electron's `protocol.handle` forwards every non-static request to the local Host with its cookie, so both `fetch("/jira/api/*")` and `/plugins/...` work. `http(s)` `target="_blank"` links are handed to the system browser by the main window's `setWindowOpenHandler`. The only difference that matters is origin-scoped localStorage, so each surface keeps its own project key / JQL.
 - **One registration covers both states**: `conversation.input.dock` renders whenever a session and its input exist, so new and active sessions need no separate registrations (the older `composer.dock` + blank-session de-duplication was both unnecessary under 0.1.7 and the cause of the meter-row collision).
 
 **Differences from the dynamic version**
