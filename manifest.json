@@ -62,7 +62,7 @@
     },
     "profileBundle": {
       "packageName": "dsh-jira-tasks",
-      "version": "1.3.0",
+      "version": "1.3.1",
       "profileDir": "$DSH_HOME/profiles/web（桌面端：$DSH_HOME/profiles/desktop）",
       "entryId": "jira-tasks",
       "route": "POST /jira/api/search",

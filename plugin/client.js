@@ -120,7 +120,7 @@ return {
       const [result, setResult] = React.useState(null);
       const [tick, setTick] = React.useState(0);
       const [editing, setEditing] = React.useState(false);
-      const [collapsed, setCollapsed] = React.useState(false);
+      const [collapsed, setCollapsed] = React.useState(true);
       const [draftKey, setDraftKey] = React.useState('');
       const [draftJql, setDraftJql] = React.useState('');
 
