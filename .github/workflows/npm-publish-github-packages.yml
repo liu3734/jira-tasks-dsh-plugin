@@ -43,13 +43,15 @@ jobs:
           # 被跳过）。这里以注册表里版本是否可见为唯一判据，并给它一点同步时间。
           npm publish 2>/tmp/npmjs-publish.log || true
           VERSION=$(node -p "require('./package.json').version")
-          for attempt in 1 2 3 4 5 6; do
+          # npm 新版本可能先返回 202 再异步复制到读取端（v1.4.0 实测约 3~4 分钟），
+          # 只等 60 秒会误判失败并跳过 GitHub Packages，这里放宽到最多 4 分钟。
+          for attempt in $(seq 1 16); do
             if npm view "dsh-jira-tasks@${VERSION}" version >/dev/null 2>&1; then
               echo "npmjs.org: dsh-jira-tasks@${VERSION} is published"
               exit 0
             fi
-            echo "npmjs.org: ${VERSION} not visible yet (attempt ${attempt}/6), retrying"
-            sleep 10
+            echo "npmjs.org: ${VERSION} not visible yet (attempt ${attempt}/16), retrying"
+            sleep 15
           done
           echo "npmjs.org: dsh-jira-tasks@${VERSION} never became visible"
           cat /tmp/npmjs-publish.log
