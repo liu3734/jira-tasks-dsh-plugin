@@ -1,5 +1,8 @@
 // JIRA 开启任务面板 —— Client 半（DSH 动态 Cordis 插件）
 // 用法：作为 cordis_define 的 code.client 函数体传入。
+// 注意：动态版只保留输入框下方的任务面板；左侧栏「JIRA 统计」页只在正式安装的
+// profile bundle（lib/client.js）里实现——它依赖 sidebar.panellist / main 槽位与
+// 完整客户端模块加载顺序。
 // 依赖：React / host / styles 闭包符号；槽位 conversation.input.dock（输入框下方整宽面板）
 return {
   inject: ['slots'],

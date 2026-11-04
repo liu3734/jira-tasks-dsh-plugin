@@ -4,10 +4,10 @@
 
 **中文** · [English](README.en.md)
 
-在 DSH 会话**输入框下方**展示当前 JIRA 项目**指派给当前用户**的「开启 / 重新开启」任务列表。JIRA 地址与令牌在**设置 → JIRA 配置**（设置对话框左侧导航）中配置（`JIRA_BASE_URL` / `JIRA_API_TOKEN` 作为回退）；项目 Key 与 JQL **按工作区配置**并持久化。
+在 DSH 会话**输入框下方**展示当前 JIRA 项目**指派给当前用户**的「开启 / 重新开启」任务列表；并在**左侧栏**新增 **JIRA 统计**入口：点开可按本浏览器已配置 / 最近查看的项目 Key 切换，或手动输入编号，查看该项目的任务统计与版本统计列表。JIRA 地址与令牌在**设置 → JIRA 配置**（设置对话框左侧导航）中配置（`JIRA_BASE_URL` / `JIRA_API_TOKEN` 作为回退）；项目 Key 与 JQL **按工作区配置**并持久化。
 
-> **适配的 DSH 版本：0.1.7 与 0.2.0（`0.1.7-rc.2`、`0.2.0-rc.2` 实测），浏览器（web profile）与桌面端（Electron 独占的 desktop profile）通用。**
-> 客户端槽位 `conversation.input.dock` / `plugins.item` / `settings.section`、设置服务 `ctx.configForms`（命名空间 = profile 条目 id `jira-tasks`）、`ctx.effect` / `configForms.whileServed` 的注销契约在 0.1.7 → 0.2.0 之间没有变化（逐包 diff 过），所以同一份 `lib/` 同时覆盖两版；0.1.6 及更早版本的 `settingsScope` / `settings.register` / `settings.plugin.item` 已不再使用。
+> **适配的 DSH 版本：0.1.7 与 0.2.x（`0.1.7-rc.2`、`0.2.0-rc.2` 实测，桌面端 `0.2.1-rc.5` 运行验证），浏览器（web profile）与桌面端（Electron 独占的 desktop profile）通用。**
+> 客户端槽位 `conversation.input.dock` / `plugins.item` / `settings.section` / `sidebar.panellist` / `main`、设置服务 `ctx.configForms`（命名空间 = profile 条目 id `jira-tasks`）、`ctx.effect` / `configForms.whileServed` 的注销契约在 0.1.7 → 0.2.0 之间没有变化（逐包 diff 过），所以同一份 `lib/` 同时覆盖两版；0.1.6 及更早版本的 `settingsScope` / `settings.register` / `settings.plugin.item` 已不再使用。
 > 包内声明了 DSH 兼容范围 `>=0.1.7-rc.2 <0.3.0-0`（`engines.dsh` + 可选 peer `@deepseek-ai/dsh`）：0.2.0 起 DSH 会在**安装与启动**时校验该范围，不满足的版本会被跳过并在插件管理器里给出 `allow-version` 精确豁免入口（peer 标了 `optional`，`pnpm` 不会把整套 `@deepseek-ai/dsh` 装进 profile）。
 
 ## 功能
@@ -28,6 +28,10 @@
 - 🧭 默认**折叠**，只显示标题与任务数；点击标题可**展开 / 收起**（标题徽标显示查询命中的任务总数，列表最多展示 50 条，按更新时间倒序）
 - 🏷️ 每条任务附状态徽章（按状态分类着色：新建 / 进行中 / 其他）、优先级与类型标签
 - 🔗 任务可点击，在新标签页打开 JIRA 详情
+- 📊 **左侧栏「JIRA 统计」入口**：点开是任务统计页 —— 只有一个可下拉的输入框：下拉列出 **DSH 里已配置的项目 Key**（各工作区保存的），也可直接输入自定义编号；页面保留任务总数 / 完成率概览
+- 🧾 **版本统计列表**：按发布日期倒序列出**最近的版本，每页 10 个，可「上一页 / 下一页」翻页**；每行给出发布状态、发布日期、任务数、待办 / 进行中 / 已完成与完成率
+- 🖱️ **版本名可点击**：进入该版本的 JIRA 任务列表 —— 点表头可按编号 / 摘要 / 状态 / 优先级 / 类型 / 负责人 / 更新排序（再点切升降序），**默认把本人的任务排在最前**，其余按更新时间倒序；任务编号可点开 JIRA 详情
+- 💾 统计页记住上次查看的项目编号（`dsh.jiraTasks.stats.v1`）；第一次打开默认沿用当前工作区面板里配置的项目编号
 - 🎨 颜色使用 DSH 主题令牌，浅色 / 深色主题自适应
 
 ## 安装
@@ -82,7 +86,7 @@ dsh plugin --profile web add github:liu3734/jira-tasks-dsh-plugin
 <details>
 <summary>动态插件方式（临时，重启后消失）</summary>
 
-在 DSH 会话中用 Cordis 工具执行：`cordis_define`（`kind: new`，`idPrefix: "jira"`，源码见仓库 `plugin/host.js` / `plugin/client.js`）→ `cordis_run` 激活。动态插件只存在于进程内存，**重启后消失**，仅适合临时试用。
+在 DSH 会话中用 Cordis 工具执行：`cordis_define`（`kind: new`，`idPrefix: "jira"`，源码见仓库 `plugin/host.js` / `plugin/client.js`）→ `cordis_run` 激活。动态插件只存在于进程内存，**重启后消失**，仅适合临时试用。动态版**只包含输入框下方的任务面板**，不包含左侧栏的任务统计页（统计页依赖 profile bundle 的完整客户端模块加载顺序与 `sidebar.panellist` / `main` 槽位，动态版未适配）。
 </details>
 
 ## 配置
@@ -136,14 +140,43 @@ project = "{projectKey}" AND status in ("开启", "重新开启") AND assignee =
 
 > 状态名按中文工作流（"开启"/"重新开启"）配置；若 JIRA 用英文状态（Open/Reopened），在 ⚙ 中填写自定义 JQL 即可。
 
+## 任务统计（左侧栏入口）
+
+点击左侧栏的 **JIRA 统计** 图标（与 Plugins / 定时任务 / 便签同一列，槽位 `sidebar.panellist`），中央面板会打开任务统计页（`main` 面板，key 为 `jira-stats`）。这个页面与会话、工作区无关，是全局页面。
+
+- **一个可下拉的输入框**：下拉选项是 **DSH 里已配置的项目 Key** —— 即各工作区在会话面板 ⚙ 里保存的 `projectKey`（右侧用工作区路径末段标注来源），加上统计页最近查看过的 Key；**不会**去拉 JIRA 的全部项目列表
+- **切换**：点输入框右侧 ▾ 展开已配置 Key，↑/↓ 移动、回车或点击选中即统计；输入时按 Key 或工作区名过滤
+- **自定义输入**：直接输入项目编号（如 `HCPFYH1`），回车或点「查询」；JIRA 项目编号自动转大写
+- **统计内容**：
+  - 概览卡片：任务总数、已完成、进行中、待办、完成率
+  - **版本统计列表**：按发布日期倒序（最近的在前；无日期 / 仅出现在任务中的版本排在最后），**每页 10 个版本**，底部「上一页 / 下一页」翻页并显示「第 X / Y 页 · 共 N 个版本」；每行含发布状态、发布日期、任务数、待办 / 进行中 / 已完成、完成率
+  - 无版本任务数单独列出
+- **版本任务列表**：点击版本名进入该版本的 JIRA 任务列表（Host 查询 `project = KEY AND fixVersion = "版本"`，字段 `summary,status,priority,issuetype,assignee,updated`，最多返回 5000 条）；点任意表头（编号 / 摘要 / 状态 / 优先级 / 类型 / 负责人 / 更新）在升序 / 降序间切换，**默认排序把本人任务放最前**、其余按更新时间倒序；「← 返回版本列表」回上一级，任务编号在新标签页打开 JIRA 详情
+- **数据口径**：Host 按项目分页扫描任务（`JQL: project = "<KEY>" ORDER BY created ASC`，`fields=status,fixVersions`，每页 1000 条），在 Host 侧聚合后一次返回；**包含子任务**（`project = ...` 不过滤 issuetype）。单次最多扫描 20000 条、整体限时 120 秒，超过任一项都会在页面顶部提示「仅统计前 N 条」。
+- **进入即用缓存**：打开统计页或切回看过的项目时，先用本次会话的缓存内容立即渲染，再在**后台静默刷新**——不再整页 loading 闪烁（只有首次打开、且该项目没有缓存时才显示加载态）
+- **刷新**：工具栏「⟳ 刷新」在后台刷新当前项目，不打断当前内容，也不切整页 loading；刷新期间只有按钮转圈（⟳ → 转圈 +「刷新中…」），完成后恢复；刷新失败保留旧内容并在工具栏下方提示
+- **切换项目**：切到有缓存的项目同样先渲染缓存再静默刷新；切到没缓存的项目会显示加载态
+- 统计页只读，不会修改 JIRA；地址与令牌复用「设置 → JIRA 配置」，不需要额外配置
+- 记住上次查看的项目编号（localStorage `dsh.jiraTasks.stats.v1`），下次打开自动统计；第一次打开默认使用会话面板里当前工作区配置的项目编号
+
+**任务统计页（概览 + 版本列表，每页 10 个可翻页）：**
+
+<img width="1400" alt="JIRA 任务统计页：概览卡片与版本统计列表" src="https://raw.githubusercontent.com/liu3734/jira-tasks-dsh-plugin/main/docs/images/stats-overview.webp" />
+
+**点版本名进入版本任务列表：表头可点排序，默认本人任务在前：**
+
+<img width="1400" alt="版本任务列表：可点表头排序，本人任务带「我」标记" src="https://raw.githubusercontent.com/liu3734/jira-tasks-dsh-plugin/main/docs/images/version-tasks.webp" />
+
+> 统计耗时与项目大小相关：几千条任务通常几秒（JIRA search 每页 1000 条）。状态归属沿用 JIRA 的 `statusCategory`（例如「关闭」「已解决」通常算已完成），如果公司工作流把某个状态配置成了 done 分类，页面会如实按该分类统计。
+
 ## 兼容性与验证
 
 | 维度 | 覆盖 |
 |---|---|
-| DSH 版本 | `0.1.7-rc.2`、`0.2.0-rc.2`（实测）；声明范围 `>=0.1.7-rc.2 <0.3.0-0`，即 0.1.7 与 0.2.x，不含 0.3.0 及其预发布 |
+| DSH 版本 | `0.1.7-rc.2`、`0.2.0-rc.2`（实测）、桌面端 `0.2.1-rc.5`（运行验证）；声明范围 `>=0.1.7-rc.2 <0.3.0-0`，即 0.1.7 与 0.2.x，不含 0.3.0 及其预发布 |
 | 运行形态 | 浏览器（`dsh web` / web profile）、桌面端 DeepSeek Harness.app（Electron，desktop profile，渲染进程 origin `dsh-app://app`） |
-| 宿主侧 | `Config` / `webServer.register` / `subprocess.spawn` / `credentials.resolve` / `settings.configure`：0.1.7 → 0.2.0 签名未变 |
-| 客户端 | `window.__ModuleLoader__.load`、`slots.inject/register`、`configForms.get/whileServed`、`remote.credentials`、槽位 `conversation.input.dock` / `plugins.item` / `settings.section`：0.1.7 → 0.2.0 契约未变 |
+| 宿主侧 | `Config` / `webServer.register` / `subprocess.spawn` / `credentials.resolve` / `settings.configure`：0.1.7 → 0.2.0 签名未变；路由 `/jira/api/search`、`/jira/api/test`、`/jira/api/stats`、`/jira/api/version-issues` |
+| 客户端 | `window.__ModuleLoader__.load`、`slots.inject/register`、`configForms.get/whileServed`、`remote.credentials`、槽位 `conversation.input.dock` / `plugins.item` / `settings.section` / `sidebar.panellist` / `main`：0.1.7 → 0.2.0 契约未变（`sidebar.panellist`（list，读 `id/order/label`）与 `main`（keyed）在 0.1.7 的 sidebar / layout 包声明中核对过；`ownerProps {size, active}` 在桌面端 0.2.1-rc.5 运行实例上核对过） |
 
 验证方式（不改动用户 profile，临时 `DSH_HOME` 起真实服务）：
 
@@ -153,6 +186,8 @@ DSH_HOME=/tmp/dsh-check node <dsh-0.2.0-rc.2>/lib/bin.js --profile web --no-open
 
 curl -sX POST http://127.0.0.1:19399/jira/api/test   -d '{}'                      # 连通性 / 鉴权
 curl -sX POST http://127.0.0.1:19399/jira/api/search -d '{"projectKey":"<KEY>"}'  # 任务查询
+curl -sX POST http://127.0.0.1:19399/jira/api/stats    -d '{"projectKey":"<KEY>"}'    # 任务统计 + 版本统计
+curl -sX POST http://127.0.0.1:19399/jira/api/version-issues -d '{"projectKey":"<KEY>","versionName":"<版本>"}'  # 版本任务列表
 curl -s "http://127.0.0.1:19399/?token=<启动日志里的 token>" | grep -o dsh-jira-tasks  # 客户端进入 __DSH_BOOT__ 模块图
 ```
 
@@ -166,6 +201,17 @@ dsh plugin --profile desktop remove dsh-jira-tasks    # 桌面端（需桌面端
 ```
 
 ## 常见问题
+
+<details>
+<summary>点版本名提示「接口 ... 返回空响应（HTTP 405）」</summary>
+
+说明**浏览器端已经是新版本，但 Host 进程还在跑旧插件**（刷新页面只重载前端 JS，不会重载 Host）。完全退出应用再打开即可：
+
+- macOS：`Cmd+Q` 或菜单「退出 DeepSeek Harness」（点红点关窗口不会退出进程）
+- 浏览器（web profile）：重启 `dsh web`
+
+重启后 `/jira/api/version-issues` 返回 200；也可以先用 `curl -X POST http://127.0.0.1:<port>/jira/api/version-issues -d '{}'` 确认不再是 405。
+</details>
 
 <details>
 <summary>面板显示「查询失败」</summary>
@@ -219,10 +265,15 @@ JIRA_TASKS_TOKEN（设置页） > JIRA_API_TOKEN > JIRA_TOKEN
 │ localStorage 按工作区存取项目 Key/JQL   │   │ ↓ stdout JSON                       │
 │ plugins.item（插件面板卡片）            │   │ 解析 issues → 返回 {ok,issues}      │
 │ settings.section（设置导航整页）        │   │                                     │
+├────────────────────────────────────────┤   ├────────────────────────────────────┤
+│ sidebar.panellist（左侧栏图标行）       │   │ /jira/api/stats → 分页扫描后聚合    │
+│   ↓ 点击切到 main（key: jira-stats）    │   │   概览 + 版本统计（每页 10 个）     │
+│ main（统计页；Key 下拉来自本地配置）    │   │ 版本任务列表（表头排序/本人优先）   │
 └────────────────────────────────────────┘   └────────────────────────────────────┘
 ```
 
-- **Host**：声明条目自身的 `Config`（`baseUrl`，`volatile`，DSH 0.1.5 起设置页的表单直接来自它；`settings.configure({ auto: false }, ctx.fiber)` 关掉自动生成页，并把返回的注销函数交回 `ctx.effect`）与 `webServer` 路由 `POST /jira/api/search`、`POST /jira/api/test`（两条路由各自包在 `ctx.effect` 里，卸载/重载时先释放，否则重挂载会撞上「重复路由」直接抛错；非 POST 返回 405）；令牌经 `credentials` 服务按 `JIRA_TASKS_TOKEN`（设置页写入）→ `JIRA_API_TOKEN` → `JIRA_TOKEN` 的顺序解析（`$DSH_HOME/.credentials.yaml` / 环境变量，热加载），因此设置页保存的令牌能覆盖环境变量；查询用 `subprocess` 直接 `spawn curl`，认证头经 stdin（`--config -`）传入，令牌不进入命令行参数。
+- **Host**：声明条目自身的 `Config`（`baseUrl`，`volatile`，DSH 0.1.5 起设置页的表单直接来自它；`settings.configure({ auto: false }, ctx.fiber)` 关掉自动生成页，并把返回的注销函数交回 `ctx.effect`）与 `webServer` 路由 `POST /jira/api/search`、`POST /jira/api/test`、`POST /jira/api/stats`、`POST /jira/api/version-issues`（每条路由各自包在 `ctx.effect` 里，卸载/重载时先释放，否则重挂载会撞上「重复路由」直接抛错；非 POST 返回 405）；令牌经 `credentials` 服务按 `JIRA_TASKS_TOKEN`（设置页写入）→ `JIRA_API_TOKEN` → `JIRA_TOKEN` 的顺序解析（`$DSH_HOME/.credentials.yaml` / 环境变量，热加载），因此设置页保存的令牌能覆盖环境变量；查询用 `subprocess` 直接 `spawn curl`，认证头经 stdin（`--config -`）传入，令牌不进入命令行参数。
+- **统计页（左侧栏入口）**：注册两处 —— `sidebar.panellist`（`id: "jira-stats"`、`order: 30`、`label: "JIRA 统计"`，组件自己画 16px SVG 图标，按 ownerProps 的 `size` / `active` 取尺寸与选中态）与 `main`（keyed 槽位，`key: "jira-stats"`）。`sidebar.panellist` 的 id 就是 `main` 的分发 key，点击侧栏图标由宿主切换中央面板；两处都包在 `slots.inject` 里，槽位声明出现/消失时自动重挂。统计页只从 Host 取聚合结果，浏览器不做全量任务计算（大数据量下更稳、更省内存）。
 - **Client**：`window.__ModuleLoader__.load({ id, factory })` 标准 web bundle，仅 `require("react")`；**只注册 `conversation.input.dock` 一处**（`order: 10`）。该槽位在新会话与活跃会话下都会渲染，属于 `composerStack`（`flex-direction: column`）的整宽纵向行；面板元素自身 `flex order: 99` 排到输入卡之后，即输入框下方，并以 `--dsh-composer-side-clearance` / `--dsh-composer-card-max-width` 与输入卡等宽。之所以不用 `conversation.composer.dock`：0.1.7 / 0.2.0 里那一槽位都渲染进 InputBar 的 `.dock`**横向** flex 行，与上下文占用环并排，整宽面板会被占用环压住右侧内容。插件地址与令牌的表单来自 `ctx.configForms.get("jira-tasks")`（地址）与 `remote.credentials`（令牌写入 `JIRA_TASKS_TOKEN`），并用 `configForms.whileServed` 保证宿主未提供该命名空间时不显示。表单**注册在两处**：插件面板卡片 `plugins.item`（`id: "jira-tasks"`，`order: 41`，原入口保留）与设置对话框左侧导航项 `settings.section`（`id: "jira-tasks"`，`order: 30` —— 大于「Agent 预设」的 20，所以显示在它下方；`label: "JIRA 配置"`；未在 `navIcon` 白名单里的 id 由设置外壳回退成默认齿轮图标）。两者共用同一个 `JiraSettingsPage`：由外部 prop `variant: "page"` 决定外层容器（`li.jt-set-card` 卡片 / `div.jt-set-page` 整页），字段区是同一份数组。`plugins.item` 的摘要位由一个**不调用任何 hook** 的分发组件负责，表单在独立的 `JiraSettingsPage` 里，避免同一实例在 `view` 切换时改变 hook 数量。
 - **为什么不用 `shell` 服务**：`shell` 会套 `sandbox-exec`，部分 macOS 上不可用（`sandbox_apply: Operation not permitted`）；`subprocess` 是原始进程缝，无此问题。
 - **桌面端为什么不用改代码**：桌面端 Host 与 web profile 是同一套 DSH（同样是 `@deepseek-ai/dsh-web-app` + `dsh-host-webserver`），渲染进程 origin 是 `dsh-app://app`，非静态资源请求由 Electron 的 `protocol.handle` 带上 Host cookie 转发到本机 Host，所以 `fetch("/jira/api/*")` 与 `/plugins/...` 都照常工作；`http(s)` 的 `target="_blank"` 由主窗口的 `setWindowOpenHandler` 交给系统浏览器。唯一差异是 localStorage 按 origin 隔离，配置需在桌面端与浏览器各存一份。

@@ -1,5 +1,7 @@
 // JIRA 开启任务面板 —— Host 半（DSH 动态 Cordis 插件）
 // 用法：作为 cordis_define 的 code.host 函数体传入。
+// 注意：动态版只有 jira/list 一个 handler；统计页的 jira/stats、jira/version-issues
+// 路由只在正式安装的 profile bundle（lib/index.js）里实现。
 // 依赖服务：subprocess / credentials / sandboxPolicy（均为 DSH Host 服务，inject 声明）
 return {
   inject: ['subprocess', 'credentials', 'sandboxPolicy'],
